@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0d14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="2600Touch">
+  <title>2600Touch</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" href="icon-180.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="screen2d" width="160" height="192"></canvas>
+
+  <!-- Full-screen touch surface, split into joystick and fire halves. -->
+  <div id="surface">
+    <div class="zone joy"><div class="hint"><b>Move</b><span>Touch &amp; drag on this side</span></div></div>
+    <div class="zone fire"><div class="hint"><b>Fire</b><span>Tap on this side</span></div></div>
+  </div>
+  <div id="ripples"></div>
+  <div id="dpad">
+    <i class="arrow up"></i><i class="arrow right"></i><i class="arrow down"></i><i class="arrow left"></i>
+    <div class="knob"></div>
+  </div>
+
+  <header id="bar">
+    <button id="menuBtn" class="icon" aria-label="Menu">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </button>
+    <div id="romName" class="title">—</div>
+    <button id="selectBtn" class="pill">Select</button>
+    <button id="resetBtn" class="pill">Reset</button>
+  </header>
+
+  <div id="menu" class="sheet-backdrop" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+      <div class="sheet-head">
+        <h1 id="menuTitle">2600<span>Touch</span></h1>
+        <button id="closeMenu" class="icon" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <section class="sec-cartridges">
+        <h2>Cartridges</h2>
+        <button id="loadBtn" class="primary wide">Add cartridge…</button>
+        <input id="romFile" type="file" hidden>
+        <ul id="library" class="carts"></ul>
+        <p id="libraryInfo" class="hint"></p>
+      </section>
+
+      <section class="sec-controls">
+        <h2>Controls</h2>
+        <label class="switch"><span>Left-handed<small>Fire on the left, joystick on the right</small></span><input id="leftHanded" type="checkbox"><i></i></label>
+        <div class="field inline">
+          <span>Joystick</span>
+          <div class="seg" id="dirSeg">
+            <button data-dirs="8">8-way</button>
+            <button data-dirs="4">4-way</button>
+          </div>
+        </div>
+        <label class="field slider"><span>D-pad size <output id="dpadSizeVal"></output></span>
+          <input id="dpadSize" type="range" min="90" max="220" step="10"></label>
+        <label class="switch" id="hapticsRow"><span>Vibrate on fire</span><input id="haptics" type="checkbox"><i></i></label>
+        <label class="switch"><span>Show zone hints</span><input id="hints" type="checkbox"><i></i></label>
+      </section>
+
+      <section class="sec-sound">
+        <h2>Sound</h2>
+        <label class="switch"><span>Sound</span><input id="sound" type="checkbox"><i></i></label>
+      </section>
+
+      <section class="sec-console">
+        <h2>Console</h2>
+        <label class="switch"><span>Color<small>Off = black &amp; white switch</small></span><input id="colorMode" type="checkbox" checked><i></i></label>
+        <label class="switch"><span>Left difficulty A</span><input id="diff0" type="checkbox"><i></i></label>
+        <label class="switch"><span>Right difficulty A</span><input id="diff1" type="checkbox"><i></i></label>
+        <div class="row"><button id="powerBtn">Power cycle</button></div>
+      </section>
+
+    </div>
+  </div>
+
+  <div id="loading" class="show" role="status" aria-live="polite">
+    <div class="card">
+      <div class="cart-slot"><div class="cart-chip"></div></div>
+      <div class="label">Loading</div>
+      <div id="loadingName" class="name">2600Touch</div>
+    </div>
+  </div>
+  <div id="toast" role="status"></div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

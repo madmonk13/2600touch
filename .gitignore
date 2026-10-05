@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+*.lst
+roms/*.a26
+roms/*.bin
+!roms/demo.bin
+out/
