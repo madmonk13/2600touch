@@ -6,8 +6,8 @@ with no dependencies and no build step.
 ## Controls
 
 - **Left half: joystick.** A d-pad appears wherever your thumb lands. Direction comes
-  from how far you drag from that spot. Sliding past the d-pad's rim holds the last
-  direction until you come back inside or lift your thumb.
+  from which way you drag from that spot, even past the d-pad's rim, so you can slide
+  from one direction to another without returning to center.
 - **Right half: fire.** Any touch fires. Quick taps are held for at least 70 ms so the
   game never misses them.
 - Both halves can be used at once. **Left-handed** mode in the menu swaps them.

@@ -1,9 +1,8 @@
 // Gesture controls: the screen is split into a joystick half and a fire half.
 //
 // Joystick half: a d-pad appears wherever the finger lands. Direction comes
-// from the finger's offset from that origin. Once the finger leaves the
-// d-pad's radius, the last direction is held until it comes back inside or
-// lifts.
+// from the finger's angle around that origin, even past the d-pad's rim, so
+// direction changes register without returning to center.
 //
 // Fire half: every touch presses fire. Each press is held for at least
 // MIN_PRESS so a quick tap is never shorter than a frame the game polls.
@@ -79,14 +78,10 @@ export class TouchControls {
     const dx = e.clientX - j.ox, dy = e.clientY - j.oy;
     const r = this.size / 2;
     const dist = Math.hypot(dx, dy);
-    if (dist <= r) {
-      j.dir = dist < r * DEADZONE ? 0 : this.direction(dx, dy);
-      this.knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-    } else {
-      // Outside the pad: hold the last direction, pin the knob to the rim.
-      const k = r / dist;
-      this.knob.style.transform = `translate(calc(-50% + ${dx * k}px), calc(-50% + ${dy * k}px))`;
-    }
+    j.dir = dist < r * DEADZONE ? 0 : this.direction(dx, dy);
+    // Past the rim the direction still follows the finger's angle; the knob pins to the edge.
+    const k = Math.min(1, r / dist);
+    this.knob.style.transform = `translate(calc(-50% + ${dx * k}px), calc(-50% + ${dy * k}px))`;
     this.showDir(j.dir);
   }
 
