@@ -10,11 +10,12 @@ with no dependencies and no build step.
   from one direction to another without returning to center.
 - **Right half: fire.** Any touch fires. Quick taps are held for at least 70 ms so the
   game never misses them.
-- Both halves can be used at once. **Left-handed** mode in the menu swaps them.
-- **Select / Reset** sit in the top bar. Most games need Reset to start.
+- Both halves can be used at once. **Left-handed** mode in settings swaps them.
+- **Select / Reset** sit in the top bar in portrait, and in a column on the right in
+  landscape. Most games need Reset to start.
 - Bluetooth keyboards and gamepads also work (arrows/WASD, Space; 1 = Select, 2 = Reset).
 
-## Menu (☰)
+## Settings (⚙)
 
 - **Cartridges:** add a `.a26`, `.bin` or `.zip`. Every cart you add is kept in a local
   collection in `localStorage`, de-duplicated by content. Tap one to play it; removing
@@ -23,7 +24,8 @@ with no dependencies and no build step.
   (Android only; Safari has no vibration API), zone hints.
 - **Sound** and the console switches (color/B&W, difficulty, power cycle).
 
-The game pauses while the menu is open and when the app is in the background.
+Settings open full screen. The game pauses and the touch controls are ignored while
+settings are open, and the game also pauses when the app is in the background.
 
 ## Run
 

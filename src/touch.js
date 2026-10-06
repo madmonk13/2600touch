@@ -25,6 +25,7 @@ export class TouchControls {
     this.size = 140;
     this.haptics = true;
     this.onTouch = null;      // called on every touch start (audio unlock, hints)
+    this.enabled = true;      // false while the settings screen is open
 
     this.joy = null;          // { id, ox, oy, dir }
     this.fireIds = new Set();
@@ -54,6 +55,7 @@ export class TouchControls {
 
   down(e) {
     e.preventDefault();
+    if (!this.enabled) return;
     if (this.onTouch) this.onTouch(e);
     try { this.surface.setPointerCapture(e.pointerId); } catch { /* synthetic events */ }
     if (this.isJoystickSide(e.clientX)) {

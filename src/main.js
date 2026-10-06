@@ -61,7 +61,6 @@ function loadRom(bytes, name, id) {
   }
   state.romId = id;
   if (saved) library.setLast(id);
-  $('romName').textContent = name;
   refreshLibrary();
 }
 
@@ -112,13 +111,18 @@ $('romFile').addEventListener('change', (e) => { if (e.target.files[0]) loadFile
 
 // ---------------------------------------------------------------- menu
 
+// The game pauses and the touch controls go inert while settings are open.
 function openMenu() {
   state.menuOpen = true;
   touch.releaseAll();
+  touch.enabled = false;
+  audio.setMuted(true);
   $('menu').hidden = false;
 }
 function closeMenu() {
   state.menuOpen = false;
+  touch.enabled = true;
+  audio.setMuted(!settings.sound);
   $('menu').hidden = true;
 }
 $('menuBtn').addEventListener('click', openMenu);
@@ -175,7 +179,7 @@ $('hints').addEventListener('change', (e) => {
 $('sound').addEventListener('change', (e) => {
   settings.sound = e.target.checked; save();
   if (settings.sound) audio.start();
-  audio.setMuted(!settings.sound);
+  audio.setMuted(!settings.sound || state.menuOpen);
 });
 $('colorMode').addEventListener('change', (e) => { atari.riot.input.color = e.target.checked; });
 $('diff0').addEventListener('change', (e) => { atari.riot.input.diff0 = e.target.checked; });
@@ -224,21 +228,23 @@ function layout2D() {
   const c = $('screen2d');
   const ps = getComputedStyle(probe);
   const sl = parseFloat(ps.paddingLeft) || 0, sr = parseFloat(ps.paddingRight) || 0;
-  const sb = parseFloat(ps.paddingBottom) || 0;
+  const st = parseFloat(ps.paddingTop) || 0, sb = parseFloat(ps.paddingBottom) || 0;
   const W = window.innerWidth, H = window.innerHeight;
-  const barH = $('bar').offsetHeight;
   const pad = 10;
   const aspect = 160 / (windowTracker.win.height * LY);
-  const availW = W - sl - sr - pad * 2;
   const portrait = H > W;
-  // Portrait keeps the lower part of the screen free for thumbs.
-  const availH = portrait ? (H - barH - sb) * 0.6 : H - barH - sb - pad;
+  // Portrait: the bar sits on top and the lower part of the screen stays free for
+  // thumbs. Landscape: the bar is a column on the right and the game gets full height.
+  const barH = portrait ? $('bar').offsetHeight : 0;
+  const railW = portrait ? 0 : $('bar').offsetWidth - sr;
+  const availW = W - sl - sr - railW - pad * 2;
+  const availH = portrait ? (H - barH - sb) * 0.6 : H - st - sb - pad * 2;
   const w = Math.max(80, Math.min(availW, availH * aspect));
   const h = w / aspect;
   c.style.width = `${w}px`;
   c.style.height = `${h}px`;
   c.style.left = `${sl + pad + (availW - w) / 2}px`;
-  c.style.top = `${portrait ? barH + 4 : barH + (availH - h) / 2}px`;
+  c.style.top = `${portrait ? barH + 4 : st + pad + (availH - h) / 2}px`;
 }
 window.addEventListener('resize', layout2D);
 window.addEventListener('orientationchange', () => setTimeout(layout2D, 200));
