@@ -144,6 +144,8 @@ body.show-hints .zone .hint { opacity: 1; }
   background: linear-gradient(rgba(11, 13, 20, 0.9), rgba(11, 13, 20, 0));
 }
 #bar #selectBtn { margin-left: auto; }
+/* Landscape: the game runs up behind the bar, so drop the bar's shading. */
+@media (orientation: landscape) { #bar { background: none; } }
 
 
 button {

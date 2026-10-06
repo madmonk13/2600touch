@@ -228,21 +228,22 @@ function layout2D() {
   const c = $('screen2d');
   const ps = getComputedStyle(probe);
   const sl = parseFloat(ps.paddingLeft) || 0, sr = parseFloat(ps.paddingRight) || 0;
-  const sb = parseFloat(ps.paddingBottom) || 0;
+  const st = parseFloat(ps.paddingTop) || 0, sb = parseFloat(ps.paddingBottom) || 0;
   const W = window.innerWidth, H = window.innerHeight;
   const pad = 10;
   const aspect = 160 / (windowTracker.win.height * LY);
   const barH = $('bar').offsetHeight;
   const availW = W - sl - sr - pad * 2;
   const portrait = H > W;
-  // Portrait keeps the lower part of the screen free for thumbs.
-  const availH = portrait ? (H - barH - sb) * 0.6 : H - barH - sb - pad;
+  // Portrait sits below the bar and keeps the lower part of the screen free for
+  // thumbs. Landscape uses the full height, running up behind the bar.
+  const availH = portrait ? (H - barH - sb) * 0.6 : H - st - sb;
   const w = Math.max(80, Math.min(availW, availH * aspect));
   const h = w / aspect;
   c.style.width = `${w}px`;
   c.style.height = `${h}px`;
   c.style.left = `${sl + pad + (availW - w) / 2}px`;
-  c.style.top = `${portrait ? barH + 4 : barH + (availH - h) / 2}px`;
+  c.style.top = `${portrait ? barH + 4 : st + (availH - h) / 2}px`;
 }
 window.addEventListener('resize', layout2D);
 window.addEventListener('orientationchange', () => setTimeout(layout2D, 200));
