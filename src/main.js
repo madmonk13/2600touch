@@ -228,23 +228,21 @@ function layout2D() {
   const c = $('screen2d');
   const ps = getComputedStyle(probe);
   const sl = parseFloat(ps.paddingLeft) || 0, sr = parseFloat(ps.paddingRight) || 0;
-  const st = parseFloat(ps.paddingTop) || 0, sb = parseFloat(ps.paddingBottom) || 0;
+  const sb = parseFloat(ps.paddingBottom) || 0;
   const W = window.innerWidth, H = window.innerHeight;
   const pad = 10;
   const aspect = 160 / (windowTracker.win.height * LY);
+  const barH = $('bar').offsetHeight;
+  const availW = W - sl - sr - pad * 2;
   const portrait = H > W;
-  // Portrait: the bar sits on top and the lower part of the screen stays free for
-  // thumbs. Landscape: the bar is a column on the right and the game gets full height.
-  const barH = portrait ? $('bar').offsetHeight : 0;
-  const railW = portrait ? 0 : $('bar').offsetWidth - sr;
-  const availW = W - sl - sr - railW - pad * 2;
-  const availH = portrait ? (H - barH - sb) * 0.6 : H - st - sb - pad * 2;
+  // Portrait keeps the lower part of the screen free for thumbs.
+  const availH = portrait ? (H - barH - sb) * 0.6 : H - barH - sb - pad;
   const w = Math.max(80, Math.min(availW, availH * aspect));
   const h = w / aspect;
   c.style.width = `${w}px`;
   c.style.height = `${h}px`;
   c.style.left = `${sl + pad + (availW - w) / 2}px`;
-  c.style.top = `${portrait ? barH + 4 : st + pad + (availH - h) / 2}px`;
+  c.style.top = `${portrait ? barH + 4 : barH + (availH - h) / 2}px`;
 }
 window.addEventListener('resize', layout2D);
 window.addEventListener('orientationchange', () => setTimeout(layout2D, 200));

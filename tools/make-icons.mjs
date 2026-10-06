@@ -1,27 +1,46 @@
 #!/usr/bin/env node
-// Generate the home-screen icons: the demo cart's little runner, in
-// chunky pixels on the app's dark background.
+// Generate the favicon and home-screen icons: "2600" in a bold, blocky 6x7
+// pixel font on a red square.
 import fs from 'node:fs';
 import zlib from 'node:zlib';
 
-const SPRITE = ['00111100', '00111100', '00011000', '01111110', '00111100', '00111100', '00100100', '01100110'];
-const BG = [11, 13, 20], FG = [255, 138, 42], SHADE = [201, 95, 16];
+const GLYPHS = {
+  2: ['011110', '110011', '000011', '001110', '011000', '110000', '111111'],
+  6: ['011110', '110000', '110000', '111110', '110011', '110011', '011110'],
+  0: ['011110', '110011', '110011', '110011', '110011', '110011', '011110'],
+};
+const TEXT = '2600';
+const RED = [212, 38, 32], SHADOW = [122, 14, 12], WHITE = [255, 255, 255];
+
+// The text as a grid of on/off cells, one blank column between digits.
+const GW = 6, COLS = TEXT.length * (GW + 1) - 1, ROWS = 7;
+const on = (cx, cy) => {
+  if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS || cx % (GW + 1) === GW) return false;
+  return GLYPHS[TEXT[Math.floor(cx / (GW + 1))]][cy][cx % (GW + 1)] === '1';
+};
+
+// Text spans ~76% of the width, which keeps it inside the maskable-icon safe zone.
+function geometry(size) {
+  const cell = Math.max(1, Math.floor((size * 0.76) / COLS));
+  const ox = Math.floor((size - cell * COLS) / 2), oy = Math.floor((size - cell * ROWS) / 2);
+  const shadow = cell >= 3 ? Math.round(cell * 0.3) : 0; // drop shadow only where it reads
+  return { cell, ox, oy, shadow };
+}
+
+function pixel(size, g, x, y) {
+  const cell = (px, py) => on(Math.floor((px - g.ox) / g.cell), Math.floor((py - g.oy) / g.cell))
+    && px >= g.ox && py >= g.oy;
+  if (cell(x, y)) return WHITE;
+  if (g.shadow && cell(x - g.shadow, y - g.shadow)) return SHADOW;
+  return RED;
+}
 
 function png(size) {
-  const cell = Math.floor(size / 12), ox = Math.floor((size - cell * 8) / 2), oy = ox;
-  const raw = Buffer.alloc((size * 3 + 1) * size);
+  const g = geometry(size);
+  const stride = size * 3 + 1;
+  const raw = Buffer.alloc(stride * size);
   for (let y = 0; y < size; y++) {
-    raw[y * (size * 3 + 1)] = 0;
-    for (let x = 0; x < size; x++) {
-      const cx = Math.floor((x - ox) / cell), cy = Math.floor((y - oy) / cell);
-      let c = BG;
-      if (cx >= 0 && cx < 8 && cy >= 0 && cy < 8 && SPRITE[cy][cx] === '1') {
-        // Shade the lower-right edge of each block for a hint of depth.
-        const lx = (x - ox) % cell, ly = (y - oy) % cell;
-        c = (lx > cell * 0.78 || ly > cell * 0.78) ? SHADE : FG;
-      }
-      raw.set(c, y * (size * 3 + 1) + 1 + x * 3);
-    }
+    for (let x = 0; x < size; x++) raw.set(pixel(size, g, x, y), y * stride + 1 + x * 3);
   }
   const chunk = (type, data) => {
     const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
@@ -35,5 +54,21 @@ function png(size) {
     chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 
-for (const size of [180, 512]) fs.writeFileSync(`icon-${size}.png`, png(size));
-console.log('wrote icon-180.png, icon-512.png');
+// Vector favicon on the same grid, so it stays crisp at any tab size.
+function svg() {
+  const size = 32, g = geometry(size);
+  const rgb = (c) => `rgb(${c.join(',')})`;
+  let cells = '';
+  for (let cy = 0; cy < ROWS; cy++) {
+    for (let cx = 0; cx < COLS; cx++) if (on(cx, cy)) cells += `M${cx} ${cy}h1v1h-1z`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges">` +
+    `<rect width="${size}" height="${size}" rx="4" fill="${rgb(RED)}"/>` +
+    `<path transform="translate(${g.ox} ${g.oy})" fill="${rgb(WHITE)}" d="${cells}"/></svg>\n`;
+}
+
+const out = [];
+for (const size of [180, 192, 512]) { fs.writeFileSync(`icon-${size}.png`, png(size)); out.push(`icon-${size}.png`); }
+fs.writeFileSync('favicon-32.png', png(32)); out.push('favicon-32.png');
+fs.writeFileSync('favicon.svg', svg()); out.push('favicon.svg');
+console.log(`wrote ${out.join(', ')}`);

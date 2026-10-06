@@ -8,7 +8,6 @@
   --accent-ink: #1a0d02;
   --radius: 12px;
   --bar-h: 52px;
-  --rail-w: 92px;  /* landscape: width of the right-hand button column */
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
@@ -47,8 +46,8 @@ html, body {
 
 /* ---------------------------------------------------------------- touch */
 
-/* The touch surface stops short of the bar (portrait) or the button column
-   (landscape) so those buttons never compete with the joystick or fire zones. */
+/* The touch surface starts below the top bar so its buttons never compete with
+   the joystick or fire zones. */
 #surface {
   position: fixed; inset: 0;
   top: calc(var(--bar-h) + var(--safe-t));
@@ -146,22 +145,6 @@ body.show-hints .zone .hint { opacity: 1; }
 }
 #bar #selectBtn { margin-left: auto; }
 
-/* Landscape: the bar becomes a column on the far right, with large Select and
-   Reset buttons, so the game can use the full height. */
-@media (orientation: landscape) {
-  #surface { top: 0; right: calc(var(--rail-w) + var(--safe-r)); }
-  #bar {
-    left: auto; bottom: 0;
-    width: calc(var(--rail-w) + var(--safe-r)); height: auto;
-    padding: calc(10px + var(--safe-t)) calc(10px + var(--safe-r)) calc(10px + var(--safe-b)) 10px;
-    flex-direction: column; align-items: stretch; gap: 10px;
-    background: rgba(255, 255, 255, 0.03);
-    border-left: 1px solid var(--line);
-  }
-  #bar #menuBtn { width: 100%; height: 52px; flex: none; }
-  #bar #selectBtn { margin-left: 0; }
-  #bar .pill { flex: 1; border-radius: 16px; font-size: 13px; }
-}
 
 button {
   font: inherit;
