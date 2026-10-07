@@ -41,10 +41,15 @@ document.addEventListener('touchmove', (e) => {
 
 // ---------------------------------------------------------------- audio
 
-// iOS only unlocks audio inside a user gesture, so try on every touch.
+// iOS only (re)starts audio inside a user gesture, and only some events count
+// (touchend and click, not always pointer events whose default was prevented),
+// so try on all of them. Capture phase so nothing can stop them first.
 const unlockAudio = () => { if (settings.sound) audio.start(); };
-window.addEventListener('pointerdown', unlockAudio);
-window.addEventListener('pointerup', unlockAudio);
+for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) {
+  window.addEventListener(ev, unlockAudio, { capture: true, passive: true });
+}
+// Coming back from the background often leaves audio suspended or interrupted.
+document.addEventListener('visibilitychange', () => { if (!document.hidden && settings.sound) audio.resume(); });
 
 // ---------------------------------------------------------------- ROMs
 
