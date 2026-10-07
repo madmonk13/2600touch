@@ -10,8 +10,10 @@ with no dependencies and no build step.
   from one direction to another without returning to center.
 - **Right half: fire.** Any touch fires. Quick taps are held for at least 70 ms so the
   game never misses them.
-- **Paddle games:** choose **Paddle** under Controller in settings (remembered per
-  cart). The left side becomes a left/right pad: the further you push, the faster the
+- **Paddle games** are detected automatically the first time a cart is loaded, and the
+  controls switch to a paddle. (The check plays the cart twice in the background with the
+  paddles turned opposite ways and looks for any difference.) You can override it under
+  Controller in settings, which is remembered per cart. The left side becomes a left/right pad: the further you push, the faster the
   paddle turns. The right side is the paddle button.
 - Both halves can be used at once. **Left-handed** mode in settings swaps them.
 - **Select / Reset** sit in the top bar, which is kept clear of the joystick and fire
@@ -52,6 +54,7 @@ screen, where it runs fullscreen.
   video/audio, RIOT, and cartridge mappers (2K, 4K, F8, F6, F4, FA, Superchip, E0, E7, 3F).
 - `src/main.js`: app wiring, menu, layout and the frame loop.
 - `src/touch.js`: the gesture controls.
+- `src/detect-worker.js`: the paddle-game check, in a background worker.
 - `src/audio-out.js`, `src/audio-worklet.js`: sound output, on the audio thread where
   supported.
 - `src/library.js`: the cartridge collection.

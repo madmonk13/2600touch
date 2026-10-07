@@ -59,9 +59,11 @@ export async function withLoading(label, work) {
 }
 
 let toastTimer = 0;
-export function toast(msg) {
+// Short message at the bottom of the screen; errors unless `info` is set.
+export function toast(msg, { info = false } = {}) {
   const el = document.getElementById('toast');
   el.textContent = msg;
+  el.classList.toggle('info', info);
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 4000);

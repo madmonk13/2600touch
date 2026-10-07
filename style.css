@@ -444,3 +444,4 @@ label.switch input:focus-visible + i { outline: 2px solid var(--accent); outline
   transition: opacity 0.2s, transform 0.2s;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
+#toast.info { background: var(--panel); border-color: var(--accent); }

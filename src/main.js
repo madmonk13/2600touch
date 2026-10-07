@@ -18,7 +18,8 @@ const DEFAULTS = {
   haptics: true,
   hints: true,
   sound: true,
-  paddleCarts: {},   // romId → true for carts played with a paddle
+  controller: {},    // romId → 'paddle' | 'joystick', when chosen in settings
+  detected: {},      // romId → { paddle, index } from the paddle check
 };
 
 const atari = new Atari2600();
@@ -33,7 +34,11 @@ const touch = new TouchControls({
 input.sources.push(touch);
 
 const settings = { ...DEFAULTS, ...(store.get('mobile') || {}) };
-settings.paddleCarts = { ...settings.paddleCarts };
+settings.controller = { ...settings.controller };
+settings.detected = { ...settings.detected };
+// Carry over the earlier per-cart paddle list.
+for (const id of Object.keys(settings.paddleCarts || {})) settings.controller[id] = 'paddle';
+delete settings.paddleCarts;
 const state = { romId: null, menuOpen: false };
 
 // Block page-level zoom/scroll gestures; this is a full-screen app.
@@ -58,6 +63,24 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && se
 
 // ---------------------------------------------------------------- ROMs
 
+// Work out once per cart whether it's a paddle game (see detect-worker.js), and
+// switch to paddle controls if so, unless the player has picked a controller.
+let detector = null;
+function detectController(id, bytes) {
+  if (settings.detected[id]) return;
+  if (!detector) {
+    try { detector = new Worker(new URL('./detect-worker.js', import.meta.url), { type: 'module' }); } catch { return; }
+    detector.onmessage = ({ data: { id: doneId, paddle, index } }) => {
+      settings.detected[doneId] = paddle ? { paddle, index } : { paddle };
+      save();
+      if (doneId !== state.romId || settings.controller[doneId] || !paddle) return;
+      applyControls();
+      toast('Paddle game detected. Change the controller in Settings.', { info: true });
+    };
+  }
+  detector.postMessage({ id, bytes: bytes.slice() });
+}
+
 // Load a cart into the console and record it in the collection.
 function loadRom(bytes, name, id) {
   const mapper = atari.load(bytes);
@@ -72,6 +95,7 @@ function loadRom(bytes, name, id) {
   state.romId = id;
   input.paddlePos = 0.5;
   applyControls();
+  detectController(id, bytes);
   if (saved) library.setLast(id);
   refreshLibrary();
 }
@@ -82,7 +106,9 @@ function refreshLibrary() {
     onPlay: (entry) => playEntry(entry),
     onRemove: (entry) => {
       library.remove(entry.id);
-      if (settings.paddleCarts[entry.id]) { delete settings.paddleCarts[entry.id]; save(); }
+      delete settings.controller[entry.id];
+      delete settings.detected[entry.id];
+      save();
       refreshLibrary();
     },
   });
@@ -166,10 +192,13 @@ function applyControls() {
   document.body.classList.toggle('lefty', settings.leftHanded);
   touch.leftHanded = settings.leftHanded;
   touch.eightWay = settings.eightWay;
-  // The controller choice is remembered per cart: paddle games need a paddle.
-  const paddle = !!settings.paddleCarts[state.romId];
+  // Controller per cart: the player's choice if they made one, else what the
+  // paddle check found.
+  const chosen = settings.controller[state.romId], found = settings.detected[state.romId];
+  const paddle = chosen ? chosen === 'paddle' : !!(found && found.paddle);
   touch.paddle = paddle;
   input.paddleMode = paddle;
+  input.paddleIndex = (found && found.index) || 0;
   document.body.classList.toggle('paddle', paddle);
   $('joyHintTitle').textContent = paddle ? 'Paddle' : 'Move';
   $('joyHintText').textContent = paddle ? 'Drag left or right on this side' : 'Touch & drag on this side';
@@ -204,8 +233,8 @@ $('leftHanded').addEventListener('change', (e) => {
 for (const b of document.querySelectorAll('[data-ctrl]')) {
   b.addEventListener('click', () => {
     const c = b.dataset.ctrl;
-    if (c === 'paddle') settings.paddleCarts[state.romId] = true;
-    else { delete settings.paddleCarts[state.romId]; settings.eightWay = c === '8'; }
+    settings.controller[state.romId] = c === 'paddle' ? 'paddle' : 'joystick';
+    if (c !== 'paddle') settings.eightWay = c === '8';
     applyControls(); save();
   });
 }

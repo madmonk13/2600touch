@@ -6,6 +6,8 @@ const P0_KEYS = {
 };
 // Full sweep of the paddle per second at full deflection.
 const PADDLE_SPEED = 1.1;
+// Each paddle's button shows up as one SWCHA bit.
+const PADDLE_BUTTONS = [0x80, 0x40, 0x08, 0x04];
 
 const P1_KEYS = { KeyI: 0x01, KeyK: 0x02, KeyJ: 0x04, KeyL: 0x08 };
 const FIRE0 = new Set(['Space', 'KeyZ', 'KeyX']);
@@ -22,6 +24,7 @@ export class Input {
     this.keys = new Set();
     this.paddleMode = false;
     this.paddlePos = 0.5;     // 0 = fully left, 1 = fully right
+    this.paddleIndex = 0;     // which of the four paddles the game reads (0-1 left port, 2-3 right)
     this.uiReset = false;
     this.uiSelect = false;
     // Extra player-0 sources (e.g. touch controls): objects with dir() → SWCHA
@@ -94,9 +97,9 @@ export class Input {
       if (p0 & 0x80) rate += 1;
       rate = Math.max(-1, Math.min(1, rate));
       this.paddlePos = Math.max(0, Math.min(1, this.paddlePos + rate * PADDLE_SPEED / 60));
-      tia.paddles[0] = 1 - this.paddlePos;
+      tia.paddles[this.paddleIndex] = 1 - this.paddlePos;
       riot.swcha = 0xFF & ~(p1 & 0x0F);
-      if (fire0) riot.swcha &= ~0x80;
+      if (fire0) riot.swcha &= ~PADDLE_BUTTONS[this.paddleIndex];
       tia.fire0 = false; // a paddle button isn't the joystick fire line
     }
   }
