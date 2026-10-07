@@ -10,8 +10,11 @@ const PADDLE_SPEED = 1.1;
 const P1_KEYS = { KeyI: 0x01, KeyK: 0x02, KeyJ: 0x04, KeyL: 0x08 };
 const FIRE0 = new Set(['Space', 'KeyZ', 'KeyX']);
 const FIRE1 = new Set(['KeyU']);
+// Console switches: Return or 2 = Reset, Tab or 1 = Select.
+const RESET_KEYS = ['Enter', 'NumpadEnter', 'Digit2'];
+const SELECT_KEYS = ['Tab', 'Digit1'];
 const GAME_KEYS = new Set([...Object.keys(P0_KEYS), ...Object.keys(P1_KEYS), ...FIRE0, ...FIRE1,
-  'Enter', 'Digit1', 'Digit2']);
+  ...RESET_KEYS, ...SELECT_KEYS]);
 
 export class Input {
   constructor(atari) {
@@ -26,7 +29,10 @@ export class Input {
     // and optionally paddleRate() → turn rate in [-1, 1].
     this.sources = [];
     window.addEventListener('keydown', (e) => {
-      if (!GAME_KEYS.has(e.code) || e.metaKey || e.ctrlKey) return;
+      if (!GAME_KEYS.has(e.code) || e.metaKey || e.ctrlKey || e.altKey) return;
+      // While a full-screen sheet is open, keys (Tab and Return especially) belong
+      // to its controls, not the paused game.
+      if (document.querySelector('.sheet-backdrop:not([hidden])')) return;
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'BUTTON')) t.blur();
       e.preventDefault();
@@ -39,8 +45,8 @@ export class Input {
   update() {
     const k = this.keys;
     let p0 = 0, p1 = 0, fire0 = false, fire1 = false;
-    let reset = this.uiReset || k.has('Enter') || k.has('Digit2');
-    let select = this.uiSelect || k.has('Digit1');
+    let reset = this.uiReset || RESET_KEYS.some((c) => k.has(c));
+    let select = this.uiSelect || SELECT_KEYS.some((c) => k.has(c));
     for (const code of k) {
       if (P0_KEYS[code]) p0 |= P0_KEYS[code];
       if (P1_KEYS[code]) p1 |= P1_KEYS[code];
