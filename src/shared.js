@@ -1,6 +1,7 @@
 // ROM file reading, storage, loading modal, toast and window tracking.
 
 import { extractRom, isZip, isGzip } from './unzip.js';
+import { MAX_LINES } from './emu/tia.js';
 
 const STORE = '2600touch:';
 const LEGACY_STORE = '3d2600:';
@@ -68,6 +69,7 @@ export function toast(msg) {
 
 // Keep the rendered window steady: only adopt a new visible scanline range
 // once it has held for a number of frames (games often wobble a line or two).
+const MAX_SETTLE = 3; // lines a frame's picture may start early/late and still be followed
 export class WindowTracker {
   constructor() { this.reset(); }
   reset() {
@@ -82,6 +84,13 @@ export class WindowTracker {
     const t = f.firstVisible;
     if (!this.have) { this.win = { top: t, height: h }; this.have = true; return this.win; }
     if (t === this.win.top && h === this.win.height) { this.pending = null; return this.win; }
+    // Same picture, starting a line or two early or late. Some games (Frogger,
+    // for one) finish their vertical-blank work a line late every so often, which
+    // a CRT smooths over; follow the picture so it doesn't hop. Layout is driven
+    // by win.height, which doesn't change.
+    if (h === this.win.height && Math.abs(t - this.win.top) <= MAX_SETTLE) {
+      return { top: Math.min(t, MAX_LINES - h), height: h };
+    }
     if (this.pending && this.pending.top === t && this.pending.height === h) {
       if (++this.pendingCount > 20) { this.win = this.pending; this.pending = null; }
     } else {
