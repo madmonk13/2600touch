@@ -15,21 +15,24 @@ const DEADZONE = 0.22;    // fraction of the d-pad radius
 const DIR8 = [RIGHT, RIGHT | DOWN, DOWN, DOWN | LEFT, LEFT, LEFT | UP, UP, UP | RIGHT];
 
 export class TouchControls {
-  constructor({ surface, dpad, ripples }) {
+  constructor({ surface, dpad, ripples, buttons = [] }) {
     this.surface = surface;
+    this.buttons = buttons;   // on-screen buttons the stick and fire must never steal from
     this.dpad = dpad;
     this.knob = dpad.querySelector('.knob');
     this.ripples = ripples;
     this.leftHanded = false;
     this.eightWay = true;
+    this.paddle = false;      // left/right only, read as a paddle turn rate
     this.size = 140;
     this.haptics = true;
     this.onTouch = null;      // called on every touch start (audio unlock, hints)
     this.enabled = true;      // false while the settings screen is open
 
-    this.joy = null;          // { id, ox, oy, dir }
+    this.joy = null;          // { id, ox, oy, dir, vel }
     this.fireIds = new Set();
     this.fireUntil = 0;
+    this.forwarded = new Map(); // pointerId → button it was handed to
 
     surface.addEventListener('pointerdown', (e) => this.down(e));
     surface.addEventListener('pointermove', (e) => this.move(e));
@@ -40,7 +43,9 @@ export class TouchControls {
   }
 
   // Input source interface (see Input.sources).
-  dir() { return this.joy ? this.joy.dir : 0; }
+  dir() { return this.joy && !this.paddle ? this.joy.dir : 0; }
+  // Paddle turn rate in [-1, 1]: how far the finger is pushed left or right.
+  paddleRate() { return this.joy && this.paddle ? this.joy.vel : 0; }
   fire() { return this.fireIds.size > 0 || performance.now() < this.fireUntil; }
 
   setSize(px) {
@@ -53,14 +58,31 @@ export class TouchControls {
     return this.leftHanded ? !leftHalf : leftHalf;
   }
 
+  // The button under a point, judged by where the buttons are laid out now.
+  // iOS can hit-test against a stale layout after rotating, so a touch on a
+  // button may arrive here instead; it gets handed back to that button.
+  buttonAt(x, y) {
+    return this.buttons.find((b) => {
+      const r = b.getBoundingClientRect();
+      return r.width && x >= r.left && x < r.right && y >= r.top && y < r.bottom;
+    });
+  }
+
   down(e) {
     e.preventDefault();
     if (!this.enabled) return;
+    const button = this.buttonAt(e.clientX, e.clientY);
+    if (button) {
+      this.forwarded.set(e.pointerId, button);
+      try { this.surface.setPointerCapture(e.pointerId); } catch { /* synthetic events */ }
+      button.dispatchEvent(new PointerEvent('pointerdown', e));
+      return;
+    }
     if (this.onTouch) this.onTouch(e);
     try { this.surface.setPointerCapture(e.pointerId); } catch { /* synthetic events */ }
     if (this.isJoystickSide(e.clientX)) {
       if (this.joy) return; // one finger drives the stick; extra fingers are ignored
-      this.joy = { id: e.pointerId, ox: e.clientX, oy: e.clientY, dir: 0 };
+      this.joy = { id: e.pointerId, ox: e.clientX, oy: e.clientY, dir: 0, vel: 0 };
       this.dpad.style.left = `${e.clientX}px`;
       this.dpad.style.top = `${e.clientY}px`;
       this.knob.style.transform = 'translate(-50%, -50%)';
@@ -79,6 +101,15 @@ export class TouchControls {
     e.preventDefault();
     const dx = e.clientX - j.ox, dy = e.clientY - j.oy;
     const r = this.size / 2;
+    if (this.paddle) {
+      // Two-way pad: only the horizontal offset counts, scaled from the edge of
+      // the dead zone (0) to the rim (full speed).
+      const x = Math.max(-r, Math.min(r, dx)), dz = r * DEADZONE;
+      j.vel = Math.abs(x) < dz ? 0 : Math.sign(x) * (Math.abs(x) - dz) / (r - dz);
+      this.knob.style.transform = `translate(calc(-50% + ${x}px), -50%)`;
+      this.showDir(j.vel < 0 ? LEFT : j.vel > 0 ? RIGHT : 0);
+      return;
+    }
     const dist = Math.hypot(dx, dy);
     j.dir = dist < r * DEADZONE ? 0 : this.direction(dx, dy);
     // Past the rim the direction still follows the finger's angle; the knob pins to the edge.
@@ -88,6 +119,13 @@ export class TouchControls {
   }
 
   up(e) {
+    const button = this.forwarded.get(e.pointerId);
+    if (button) {
+      this.forwarded.delete(e.pointerId);
+      // Only a real release counts as a tap; a cancel still lets go of the button.
+      button.dispatchEvent(new PointerEvent(e.type === 'pointerup' ? 'pointerup' : 'pointercancel', e));
+      return;
+    }
     if (this.joy && e.pointerId === this.joy.id) {
       this.joy = null;
       this.dpad.className = '';
@@ -122,6 +160,7 @@ export class TouchControls {
   // Release everything (e.g. when a menu opens over the controls).
   releaseAll() {
     this.joy = null;
+    this.forwarded.clear();
     this.fireIds.clear();
     this.fireUntil = 0;
     this.dpad.className = '';

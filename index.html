@@ -20,7 +20,7 @@
 
   <!-- Full-screen touch surface, split into joystick and fire halves. -->
   <div id="surface">
-    <div class="zone joy"><div class="hint"><b>Move</b><span>Touch &amp; drag on this side</span></div></div>
+    <div class="zone joy"><div class="hint"><b id="joyHintTitle">Move</b><span id="joyHintText">Touch &amp; drag on this side</span></div></div>
     <div class="zone fire"><div class="hint"><b>Fire</b><span>Tap on this side</span></div></div>
   </div>
   <div id="ripples"></div>
@@ -58,10 +58,11 @@
         <h2>Controls</h2>
         <label class="switch"><span>Left-handed<small>Fire on the left, joystick on the right</small></span><input id="leftHanded" type="checkbox"><i></i></label>
         <div class="field inline">
-          <span>Joystick</span>
-          <div class="seg" id="dirSeg">
-            <button data-dirs="8">8-way</button>
-            <button data-dirs="4">4-way</button>
+          <span>Controller</span>
+          <div class="seg" id="ctrlSeg">
+            <button data-ctrl="8">8-way</button>
+            <button data-ctrl="4">4-way</button>
+            <button data-ctrl="paddle">Paddle</button>
           </div>
         </div>
         <label class="field slider"><span>D-pad size <output id="dpadSizeVal"></output></span>

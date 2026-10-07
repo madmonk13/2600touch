@@ -99,6 +99,15 @@ body.show-hints .zone .hint { opacity: 1; }
   z-index: 4;
 }
 #dpad.show { opacity: 1; transform: scale(1); }
+/* Paddle mode: a two-way, left/right pad, half as tall as the d-pad. */
+body.paddle #dpad {
+  height: calc(var(--size) / 2);
+  margin-top: calc(var(--size) / -4);
+  border-radius: 999px;
+}
+body.paddle #dpad .arrow { height: 44%; }
+body.paddle #dpad .arrow.up, body.paddle #dpad .arrow.down { display: none; }
+body.paddle #dpad .knob { height: 76%; }
 #dpad .arrow {
   position: absolute; left: 50%; top: 50%;
   width: 22%; height: 22%;
@@ -325,7 +334,7 @@ label.switch input:focus-visible + i { outline: 2px solid var(--accent); outline
   }
   .field.inline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .field.inline > span { margin: 0; }
-  .field.inline .seg { flex: none; width: 140px; }
+  .field.inline .seg { flex: none; width: 190px; }
 }
 
 /* Phone landscape: compact spacing so everything fits the short screen. */
@@ -349,7 +358,8 @@ label.switch input:focus-visible + i { outline: 2px solid var(--accent); outline
   .field { margin-top: 4px; }
   .field > span { margin-bottom: 2px; }
   .field.inline { min-height: 34px; }
-  .field.inline .seg { width: 128px; }
+  .field.inline .seg { flex: 1; width: auto; max-width: 190px; }
+  .field.inline .seg button { padding: 6px 2px; }
   .seg button { padding: 6px; font-size: 13px; }
   .field input[type=range] { margin: 0; }
   .row { margin-top: 4px; }

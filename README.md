@@ -10,6 +10,9 @@ with no dependencies and no build step.
   from one direction to another without returning to center.
 - **Right half: fire.** Any touch fires. Quick taps are held for at least 70 ms so the
   game never misses them.
+- **Paddle games:** choose **Paddle** under Controller in settings (remembered per
+  cart). The left side becomes a left/right pad: the further you push, the faster the
+  paddle turns. The right side is the paddle button.
 - Both halves can be used at once. **Left-handed** mode in settings swaps them.
 - **Select / Reset** sit in the top bar, which is kept clear of the joystick and fire
   zones. Most games need Reset to start.
@@ -20,7 +23,7 @@ with no dependencies and no build step.
 - **Cartridges:** add a `.a26`, `.bin` or `.zip`. Every cart you add is kept in a local
   collection in `localStorage`, de-duplicated by content. Tap one to play it; removing
   takes two taps. The last cart played resumes on launch.
-- **Controls:** left-handed, 8-way or 4-way joystick, d-pad size, vibrate on fire
+- **Controls:** left-handed, controller (8-way joystick, 4-way joystick or paddle), d-pad size, vibrate on fire
   (Android only; Safari has no vibration API), zone hints.
 - **Sound** and the console switches (color/B&W, difficulty, power cycle).
 
@@ -34,7 +37,9 @@ npm start     # http://localhost:2601
 ```
 
 To try it on a phone, serve it on your local network (e.g. `python3 -m http.server 2601
---bind 0.0.0.0`) and open `http://<your-computer's-ip>:2601`. It can be added to the home
+--bind 0.0.0.0`) and open `http://<your-computer's-ip>:2601`. Over plain http the
+browser won't run the low-latency audio path, so sound falls back to a slower one; the
+https GitHub Pages build gets the fast path. It can be added to the home
 screen, where it runs fullscreen.
 
 ## Layout
@@ -43,6 +48,8 @@ screen, where it runs fullscreen.
   video/audio, RIOT, and cartridge mappers (2K, 4K, F8, F6, F4, FA, Superchip, E0, E7, 3F).
 - `src/main.js`: app wiring, menu, layout and the frame loop.
 - `src/touch.js`: the gesture controls.
+- `src/audio-out.js`, `src/audio-worklet.js`: sound output, on the audio thread where
+  supported.
 - `src/library.js`: the cartridge collection.
 - `src/shared.js`: ROM file reading (incl. zip/gz via `src/unzip.js`), loading modal, toast.
 - `roms/demo.asm`: a homebrew demo cart, built with `npm run build:demo` (needs `dasm`).

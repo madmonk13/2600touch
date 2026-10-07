@@ -1,17 +1,27 @@
 // Browser audio sink for the TIA sample ring buffer. Must be started from a
 // user gesture.
 //
+// Output goes through an AudioWorklet where available: it runs on the audio
+// thread, so it can keep a short queue without dropping out when the main
+// thread is busy emulating. Older browsers and insecure (plain http) pages fall
+// back to a ScriptProcessor, which pulls straight from the TIA ring buffer.
+//
 // Mobile browsers (iOS especially) can leave the context 'suspended' or
 // 'interrupted' after backgrounding, a call or another app taking audio, and
-// sometimes leave it 'running' while the processor has quietly stopped. start()
-// is called on every user gesture and repairs whichever of these it finds.
+// sometimes leave it 'running' while output has quietly stopped. start() is
+// called on every user gesture and repairs whichever of these it finds.
 
-const STALL_MS = 1000;   // no audio callback for this long while running = stalled
+import { TIA_SAMPLE_RATE } from './emu/audio.js';
+
+const STALL_MS = 1000;   // no sign of output for this long while running = stalled
+const WORKLET_URL = new URL('./audio-worklet.js', import.meta.url);
 
 export class AudioOut {
   constructor(tiaAudio) {
     this.source = tiaAudio;
     this.ctx = null;
+    this.node = null;
+    this.worklet = false;   // true once the AudioWorklet path is live
     this.muted = false;
     this.lastProcess = 0;
   }
@@ -34,25 +44,57 @@ export class AudioOut {
   }
 
   create(Ctx) {
-    this.ctx = new Ctx();
-    const node = this.ctx.createScriptProcessor(1024, 0, 1);
+    const ctx = this.ctx = new Ctx({ latencyHint: 'interactive' });
+    this.gain = ctx.createGain();
+    this.gain.gain.value = 0.5;
+    this.gain.connect(ctx.destination);
+    this.lastProcess = performance.now();
+    if (!ctx.audioWorklet) { this.useScriptProcessor(); return; }
+    ctx.audioWorklet.addModule(WORKLET_URL).then(() => {
+      if (this.ctx !== ctx) return; // rebuilt while loading
+      const node = new AudioWorkletNode(ctx, 'tia-output', {
+        numberOfInputs: 0, outputChannelCount: [1], processorOptions: { tiaRate: TIA_SAMPLE_RATE },
+      });
+      node.port.onmessage = () => { this.lastProcess = performance.now(); };
+      node.connect(this.gain);
+      this.node = node;
+      this.worklet = true;
+      this.source.readPos = this.source.writePos;
+    }).catch(() => { if (this.ctx === ctx) this.useScriptProcessor(); });
+  }
+
+  useScriptProcessor() {
+    const node = this.ctx.createScriptProcessor(512, 0, 1);
     node.onaudioprocess = (e) => {
       this.lastProcess = performance.now();
       const out = e.outputBuffer.getChannelData(0);
       if (this.muted) { out.fill(0); this.source.readPos = this.source.writePos; return; }
       this.source.pull(out, this.ctx.sampleRate);
     };
-    this.gain = this.ctx.createGain();
-    this.gain.gain.value = 0.5;
-    node.connect(this.gain).connect(this.ctx.destination);
+    node.connect(this.gain);
     this.node = node;
-    this.lastProcess = performance.now();
+    this.worklet = false;
+  }
+
+  // Hand the samples emulated since the last call to the worklet. Called after
+  // each batch of frames; a no-op on the ScriptProcessor path, which pulls.
+  flush() {
+    if (!this.worklet) return;
+    const src = this.source, n = src.available();
+    if (!n) return;
+    if (this.muted || this.ctx.state !== 'running') { src.readPos = src.writePos; return; }
+    const buf = src.buffer, mask = buf.length - 1, out = new Float32Array(n);
+    for (let i = 0, r = src.readPos; i < n; i++, r = (r + 1) & mask) out[i] = buf[r];
+    src.readPos = src.writePos;
+    this.node.port.postMessage(out, [out.buffer]);
   }
 
   rebuild() {
-    try { this.node.disconnect(); } catch { /* already gone */ }
+    try { this.node && this.node.disconnect(); } catch { /* already gone */ }
     this.ctx.close().catch(() => {});
     this.ctx = null;
+    this.node = null;
+    this.worklet = false;
   }
 
   stalled() {
@@ -72,7 +114,10 @@ export class AudioOut {
 
   setMuted(m) {
     // Drop anything queued while muted so sound resumes in sync with the game.
-    if (this.muted && !m) this.source.readPos = this.source.writePos;
+    if (this.muted && !m) {
+      this.source.readPos = this.source.writePos;
+      if (this.worklet) this.node.port.postMessage('flush');
+    }
     this.muted = m;
   }
 }

@@ -83,8 +83,8 @@ export class TIAAudio {
   pull(out, outRate) {
     const buf = this.buffer, mask = buf.length - 1;
     const step = TIA_SAMPLE_RATE / outRate;
-    const maxBacklog = TIA_SAMPLE_RATE * 0.12;
-    if (this.available() > maxBacklog) this.readPos = (this.writePos - Math.floor(TIA_SAMPLE_RATE * 0.05)) & mask;
+    const maxBacklog = TIA_SAMPLE_RATE * 0.075;
+    if (this.available() > maxBacklog) this.readPos = (this.writePos - Math.floor(TIA_SAMPLE_RATE * 0.035)) & mask;
     let pos = this.frac || 0;
     let last = this.last || 0;
     for (let i = 0; i < out.length; i++) {

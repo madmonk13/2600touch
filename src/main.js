@@ -18,6 +18,7 @@ const DEFAULTS = {
   haptics: true,
   hints: true,
   sound: true,
+  paddleCarts: {},   // romId → true for carts played with a paddle
 };
 
 const atari = new Atari2600();
@@ -25,10 +26,14 @@ const input = new Input(atari);
 const audio = new AudioOut(atari.tia.audio);
 const screen2d = new Screen2D($('screen2d'));
 const windowTracker = new WindowTracker();
-const touch = new TouchControls({ surface: $('surface'), dpad: $('dpad'), ripples: $('ripples') });
+const touch = new TouchControls({
+  surface: $('surface'), dpad: $('dpad'), ripples: $('ripples'),
+  buttons: [$('menuBtn'), $('selectBtn'), $('resetBtn')],
+});
 input.sources.push(touch);
 
 const settings = { ...DEFAULTS, ...(store.get('mobile') || {}) };
+settings.paddleCarts = { ...settings.paddleCarts };
 const state = { romId: null, menuOpen: false };
 
 // Block page-level zoom/scroll gestures; this is a full-screen app.
@@ -65,6 +70,8 @@ function loadRom(bytes, name, id) {
     if (!saved) toast('Storage is full, so this cart won\'t be saved. Remove some to make room.');
   }
   state.romId = id;
+  input.paddlePos = 0.5;
+  applyControls();
   if (saved) library.setLast(id);
   refreshLibrary();
 }
@@ -73,7 +80,11 @@ function refreshLibrary() {
   renderLibrary($('library'), {
     currentId: state.romId,
     onPlay: (entry) => playEntry(entry),
-    onRemove: (entry) => { library.remove(entry.id); refreshLibrary(); },
+    onRemove: (entry) => {
+      library.remove(entry.id);
+      if (settings.paddleCarts[entry.id]) { delete settings.paddleCarts[entry.id]; save(); }
+      refreshLibrary();
+    },
   });
   const n = library.list().length;
   $('libraryInfo').textContent = n
@@ -135,6 +146,12 @@ function closeMenu() {
 $('menuBtn').addEventListener('pointerup', (e) => { e.preventDefault(); openMenu(); });
 $('menuBtn').addEventListener('click', (e) => { if (e.detail === 0) openMenu(); }); // keyboard
 $('closeMenu').addEventListener('click', closeMenu);
+// After rotating, iOS can hit-test the settings screen against its old layout, so
+// the close button (which moves) stops getting taps. Judge by position instead.
+$('menu').addEventListener('pointerup', (e) => {
+  const r = $('closeMenu').getBoundingClientRect();
+  if (e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom) closeMenu();
+});
 $('menu').addEventListener('click', (e) => { if (e.target === $('menu')) closeMenu(); });
 
 function save() { store.set('mobile', settings); }
@@ -143,12 +160,18 @@ function applyControls() {
   document.body.classList.toggle('lefty', settings.leftHanded);
   touch.leftHanded = settings.leftHanded;
   touch.eightWay = settings.eightWay;
+  // The controller choice is remembered per cart: paddle games need a paddle.
+  const paddle = !!settings.paddleCarts[state.romId];
+  touch.paddle = paddle;
+  input.paddleMode = paddle;
+  document.body.classList.toggle('paddle', paddle);
+  $('joyHintTitle').textContent = paddle ? 'Paddle' : 'Move';
+  $('joyHintText').textContent = paddle ? 'Drag left or right on this side' : 'Touch & drag on this side';
   touch.haptics = settings.haptics;
   touch.setSize(settings.dpadSize);
   $('dpadSizeVal').textContent = `${settings.dpadSize}px`;
-  for (const b of document.querySelectorAll('[data-dirs]')) {
-    b.classList.toggle('active', (b.dataset.dirs === '8') === settings.eightWay);
-  }
+  const ctrl = paddle ? 'paddle' : settings.eightWay ? '8' : '4';
+  for (const b of document.querySelectorAll('[data-ctrl]')) b.classList.toggle('active', b.dataset.ctrl === ctrl);
 }
 
 function syncMenu() {
@@ -172,8 +195,13 @@ function flashHints(ms) {
 $('leftHanded').addEventListener('change', (e) => {
   settings.leftHanded = e.target.checked; applyControls(); save(); flashHints(2500);
 });
-for (const b of document.querySelectorAll('[data-dirs]')) {
-  b.addEventListener('click', () => { settings.eightWay = b.dataset.dirs === '8'; applyControls(); save(); });
+for (const b of document.querySelectorAll('[data-ctrl]')) {
+  b.addEventListener('click', () => {
+    const c = b.dataset.ctrl;
+    if (c === 'paddle') settings.paddleCarts[state.romId] = true;
+    else { delete settings.paddleCarts[state.romId]; settings.eightWay = c === '8'; }
+    applyControls(); save();
+  });
 }
 $('dpadSize').addEventListener('input', (e) => { settings.dpadSize = +e.target.value; applyControls(); save(); });
 $('haptics').addEventListener('change', (e) => {
@@ -253,8 +281,23 @@ function layout2D() {
   c.style.left = `${sl + pad + (availW - w) / 2}px`;
   c.style.top = `${portrait ? barH + 4 : st + (availH - h) / 2}px`;
 }
-window.addEventListener('resize', layout2D);
-window.addEventListener('orientationchange', () => setTimeout(layout2D, 200));
+// Rotating can leave iOS with the page scrolled or zoomed a little, which shifts
+// where taps land relative to what's drawn. Snap back after every resize, and
+// again once the rotation animation has settled.
+function onViewportChange() {
+  if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+  if (state.menuOpen && innerWidth > innerHeight) document.querySelector('.sheet').scrollTop = 0;
+  layout2D();
+}
+let settleTimer = 0;
+function onRotate() {
+  onViewportChange();
+  clearTimeout(settleTimer);
+  settleTimer = setTimeout(onViewportChange, 350);
+}
+window.addEventListener('resize', onRotate);
+window.addEventListener('orientationchange', onRotate);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', onRotate);
 
 // ---------------------------------------------------------------- loop
 
@@ -274,6 +317,7 @@ function tick(now) {
       ran++;
     }
     if (ran === 4) acc = 0;
+    audio.flush();
     if (ran) {
       const f = atari.tia.front;
       const win = windowTracker.update(f);
@@ -312,3 +356,4 @@ function tick(now) {
 window.atari = atari;
 window.touch = touch;
 window.input = input;
+window.audio = audio;
