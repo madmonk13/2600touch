@@ -133,7 +133,7 @@ async function playEntry(entry) {
 }
 
 async function loadDemoNow() {
-  loadRom(await fetchRom('roms/demo.bin'), 'Demo cart', DEMO_ID);
+  loadRom(await fetchRom('roms/demo.bin'), 'Snake', DEMO_ID);
 }
 
 async function loadFile(file) {
@@ -380,7 +380,7 @@ function tick(now) {
   const last = lastId && lastId !== DEMO_ID ? library.entry(lastId) : null;
   const bytes = last && library.get(last.id);
   try {
-    await withLoading(bytes ? last.name : 'Demo cart', async () => {
+    await withLoading(bytes ? last.name : 'Snake', async () => {
       if (bytes) loadRom(bytes, last.name, last.id);
       else await loadDemoNow();
     });

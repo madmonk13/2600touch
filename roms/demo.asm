@@ -1,44 +1,94 @@
-; 2600Touch demo cart — a small playable scene that exercises every TIA object:
-;   playfield maze (reflected), player 0 (you), player 1 (double-size alien),
-;   missile 0 (your shot), ball (bouncing), per-line background colors.
+; 2600Touch demo cart: Snake.
 ;
-; Controls: joystick moves, fire shoots. Hitting the alien flashes the maze.
+; Steer with the joystick; any direction or fire starts. Eat the red food to
+; grow and score; the snake speeds up every 5 points. Running into a wall or
+; yourself ends the game (the screen flashes); press fire to play again.
+; Reset restarts at any time.
+;
+; The board is 32x16 cells drawn with an asymmetric playfield: every scanline
+; writes PF0/PF1/PF2 for the left half, then again mid-line for the right half.
+; Each cell is 4 pixels wide and 8 scanlines tall, with a one-line gap between
+; rows. The food is missile 0; the score is players 0 and 1.
 ;
 ; Build: npm run build:demo
 
         processor 6502
         include "vcs.h"
 
-SPRITE_H = 8          ; sprite height in line-pairs
-M0_OFF   = 200        ; M0Y value meaning "no missile"
+ROWS     = 16
+ROWBYTES = 5          ; PF1L, PF2L, PF0R, PF1R, PF2R
+MINX     = 4          ; playable columns 4..35 (walls at 3 and 36)
+MAXX     = 35
+MAXLEN   = 60         ; ring holds 64 moves; stop growing a little short
+NOFOOD   = $FF
+
+C_SNAKE  = $C8        ; green
+C_FOOD   = $44        ; red
+C_SCORE  = $0E        ; white
+C_DEAD   = $42        ; red flash
+
+; Three full-width wall lines, columns 3-36 (asymmetric playfield).
+        MAC WALL
+        ldx #3
+.wl     sta WSYNC               ;  0
+        lda #$80                ;  2
+        sta PF0                 ;  5
+        lda #$FF                ;  7
+        sta PF1                 ; 10  both halves
+        sta PF2                 ; 13
+        nop                     ; 15
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop                     ; 27
+        lda #$F0                ; 29
+        sta PF0                 ; 32  right PF0
+        nop                     ; 34
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop                     ; 48
+        lda #$1F                ; 50
+        sta PF2                 ; 53  right PF2 up to column 36
+        dex
+        bne .wl
+        ENDM
 
         SEG.U vars
         ORG $80
-P0X     ds 1
-P0Y     ds 1
-OldX    ds 1
-OldY    ds 1
-P1X     ds 1
-P1Y     ds 1
-P1DX    ds 1
-P1DY    ds 1
-BLX     ds 1
-BLY     ds 1
-BLDX    ds 1
-BLDY    ds 1
-M0X     ds 1
-M0Y     ds 1
-M0DX    ds 1
-Facing  ds 1
-Frame   ds 1
-Tmp0    ds 1
-Tmp1    ds 1
-P0Cnt   ds 1
-P1Cnt   ds 1
-P0Ptr   ds 2
-P1Ptr   ds 2
-Score   ds 1
-HitTime ds 1
+Grid     ds ROWS*ROWBYTES   ; playfield bytes, ready to write to the TIA
+Ring     ds 16              ; snake moves, 2 bits each (0 up, 1 right, 2 down, 3 left)
+HeadX    ds 1
+HeadY    ds 1
+TailX    ds 1
+TailY    ds 1
+Dir      ds 1               ; direction of the last move
+NextDir  ds 1               ; direction for the next move
+RingHead ds 1               ; next move slot to write
+RingTail ds 1               ; oldest move (the tail's next step)
+Len      ds 1
+FoodX    ds 1
+FoodY    ds 1               ; NOFOOD when none is placed
+Score    ds 1               ; BCD
+Speed    ds 1               ; frames per move
+Timer    ds 1
+State    ds 1               ; 0 waiting, 1 playing, 2 dead
+DeadT    ds 1
+Seed     ds 1
+Snd      ds 1
+Row      ds 1
+Tens     ds 1
+Ones     ds 1
+Tmp      ds 1
+Tmp2     ds 1
+Tmp3     ds 1
+FoodRow  = Tmp2           ; kernel only: FoodY - 16, matched against Row
+FoodOn   = Tmp3           ; kernel only: ENAM0 value for the current row
 
         SEG code
         ORG $F000
@@ -52,39 +102,15 @@ Reset
         txs
         pha
         bne .clear
+        lda #$5A
+        sta Seed
+        jsr InitGame
 
-        lda #24
-        sta P0X
-        lda #10
-        sta P0Y
-        lda #100
-        sta P1X
-        lda #60
-        sta P1Y
-        lda #1
-        sta P1DX
-        sta P1DY
-        sta BLDY
-        lda #80
-        sta BLX
-        lda #40
-        sta BLY
-        lda #$FF
-        sta BLDX
-        lda #M0_OFF
-        sta M0Y
+; ---------------------------------------------------------------- frame
 
-        lda #$21            ; reflected playfield, 4-pixel ball
-        sta CTRLPF
-        lda #$20            ; 4-pixel missile 0
-        sta NUSIZ0
-        lda #$05            ; double-size player 1
-        sta NUSIZ1
-
-;---------------------------------------------------------------- frame
-MainLoop
+Frame
         lda #2
-        sta WSYNC
+        sta VBLANK
         sta VSYNC
         sta WSYNC
         sta WSYNC
@@ -94,193 +120,526 @@ MainLoop
         lda #43
         sta TIM64T
 
-        inc Frame
-        jsr Joystick
-        jsr MoveP1
-        jsr MoveBall
-        jsr MoveMissile
+        ; Reset switch restarts.
+        lda SWCHB
+        lsr
+        bcs .noReset
+        jsr InitGame
+.noReset
 
-        ; colors
-        lda #$1E
-        sta COLUP0
-        lda Frame
+        lda State
+        beq .waiting
+        cmp #1
+        beq .playing
+        ; Dead: flash for a while, then wait for fire.
+        lda DeadT
+        beq .deadWait
+        dec DeadT
+        jmp .logicDone
+.deadWait
+        lda INPT4
+        bmi .logicDone
+        jsr InitGame
+        jmp .logicDone
+
+.waiting
+        jsr Rand                ; stir the seed while the player gets ready
+        jsr ReadStick
+        bcs .start
+        lda INPT4
+        bmi .logicDone
+.start  lda #1
+        sta State
+        jmp .logicDone
+
+.playing
+        jsr ReadStick
+        dec Timer
+        bne .logicDone
+        lda Speed
+        sta Timer
+        jsr Step
+
+.logicDone
+        lda FoodY
+        cmp #NOFOOD
+        bne .haveFood
+        jsr PlaceFood
+.haveFood
+
+        ; Let the current sound effect run out.
+        lda Snd
+        beq .sndDone
+        dec Snd
+        bne .sndDone
+        lda #0
+        sta AUDV0
+.sndDone
+
+        ; Score digits: offsets into Digits (8 bytes a glyph), blank leading zero.
+        lda Score
+        and #$0F
         asl
         asl
+        asl
+        sta Ones
+        lda Score
         and #$F0
-        ora #$08
-        sta COLUP1
-        lda HitTime
-        beq .calm
-        dec HitTime
-        lda #$0E
-        bne .setpf
-.calm   lda #$66
-.setpf  sta COLUPF
+        bne .tens
+        lda #10*16
+.tens   lsr
+        sta Tens
 
-        ; horizontal positions
+        lda FoodY               ; NOFOOD becomes $EF, which no row matches
+        sec
+        sbc #ROWS
+        sta FoodRow
+
+        ; Colors.
+        lda DeadT
+        and #8
+        beq .bk
+        lda #C_DEAD
+.bk     sta COLUBK
+        lda #C_SNAKE
+        sta COLUPF
+        lda #C_SCORE
+        sta COLUP0
+        sta COLUP1
+        lda #$20                ; missile 0 four pixels wide
+        sta NUSIZ0
+        lda #0
+        sta NUSIZ1
+        sta CTRLPF
+
+        ; Positions: score digits side by side, food at its column.
+        lda #72
         ldx #0
-        lda P0X
         jsr PosObject
+        lda #80
         ldx #1
-        lda P1X
         jsr PosObject
+        lda FoodX
+        asl
+        asl
+        sec                     ; the missile lands 2 pixels right of a player
+        sbc #2
         ldx #2
-        lda M0X
-        jsr PosObject
-        ldx #4
-        lda BLX
         jsr PosObject
         sta WSYNC
         sta HMOVE
 
-        ; sprite pointers / skip-draw counters
-        lda #<ManGfx
-        sec
-        sbc P0Y
-        sta P0Ptr
-        lda #>ManGfx
-        sbc #0
-        sta P0Ptr+1
-        lda #<AlienGfx
-        sec
-        sbc P1Y
-        sta P1Ptr
-        lda #>AlienGfx
-        sbc #0
-        sta P1Ptr+1
-        lda #95
-        sec
-        sbc P0Y
-        sta P0Cnt
-        lda #95
-        sec
-        sbc P1Y
-        sta P1Cnt
+.waitVBlank
+        lda INTIM
+        bne .waitVBlank
+        sta WSYNC
         lda #0
-        sta Tmp0
-        sta Tmp1
-        ldy #95
-
-.vbwait lda INTIM
-        bne .vbwait
         sta VBLANK
 
-;---------------------------------------------------------------- kernel
-; Two scanlines per iteration, Y = line-pair (95 at top, 0 at bottom).
-KLoop
-        sta WSYNC
-        ; ---- line A: sprites, background, ball, missile
-        lda BkTab,y         ; 4
-        sta COLUBK          ; 3
-        lda Tmp0            ; 3
-        sta GRP0            ; 3
-        lda Tmp1            ; 3
-        sta GRP1            ; 3   19
-        tya                 ; 2
-        lsr                 ; 2
-        lsr                 ; 2
-        tax                 ; 2   27  X = playfield row
-        tya
-        sec
-        sbc BLY
-        cmp #3
-        lda #0
-        bcs .nobl
-        lda #2
-.nobl   sta ENABL           ;     45
-        tya
-        sec
-        sbc M0Y
-        cmp #2
-        lda #0
-        bcs .nom0
-        lda #2
-.nom0   sta ENAM0           ;     63
+; ---------------------------------------------------------------- kernel (192 lines)
 
-        sta WSYNC
-        ; ---- line B: playfield, then next pair's sprite rows
-        lda PF0Tab,x        ; 4
-        sta PF0             ; 3
-        lda PF1Tab,x        ; 4
-        sta PF1             ; 3
-        lda PF2Tab,x        ; 4
-        sta PF2             ; 3   21
-        dey                 ; 2   23
-        lda #SPRITE_H-1     ; 2
-        dcp P0Cnt           ; 5
-        bcs .draw0          ; 2/3
-        lda #0              ; 2
-        .byte $2C           ; 4   (BIT abs: skips next instruction)
-.draw0  lda (P0Ptr),y       ; 5/6
-        sta Tmp0            ; 3   ~42
-        lda #SPRITE_H-1
-        dcp P1Cnt
-        bcs .draw1
-        lda #0
-        .byte $2C
-.draw1  lda (P1Ptr),y
-        sta Tmp1            ;     ~61
-        tya                 ; 2
-        bpl KLoop           ; 3   ~66
+        ldx #8                  ; 8 blank
+.top    sta WSYNC
+        dex
+        bne .top
 
-;---------------------------------------------------------------- overscan
+        ldx #8                  ; 16 score lines, each glyph row doubled
+.score  sta WSYNC
+        ldy Tens
+        lda Digits,y
+        sta GRP0
+        ldy Ones
+        lda Digits,y
+        sta GRP1
         sta WSYNC
-        lda #2
-        sta VBLANK
+        inc Tens
+        inc Ones
+        dex
+        bne .score
+
+        sta WSYNC               ; 6 blank
         lda #0
         sta GRP0
         sta GRP1
-        sta ENABL
-        sta ENAM0
+        lda #C_FOOD
+        sta COLUP0
+        ldx #5
+.gap    sta WSYNC
+        dex
+        bne .gap
+
+        WALL                    ; 3 wall lines
+
+        lda #-ROWS              ; 16 rows x 9 lines; Row counts -16..-1 so the
+        sta Row                 ; loop ends on a bare inc/bne
+.row
+        ; Gap line: just the side walls, then pick up this row's bytes.
+        sta WSYNC               ;  0
+        lda #$80                ;  2
+        sta PF0                 ;  5  left wall (column 3)
+        lda #0                  ;  7
+        sta PF1                 ; 10
+        sta PF2                 ; 13
+        sta ENAM0               ; 16  no food on gap lines
+        ldy Row                 ; 19
+        ldx RowOff+ROWS-256,y   ; 23/24
+        lda #0                  ; 25/26
+        cpy FoodRow             ; 28/29
+        bne .noFood             ; 30-32
+        lda #2
+.noFood sta FoodOn              ; 34-36  shown from the row's first line
+        lda #0
+        sta PF0                 ; 39-41  right PF0 off
+        lda #$10
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        sta PF2                 ; 56-58  right wall (column 36)
+        ldy #8
+.line
+        sta WSYNC               ;  0
+        lda FoodOn              ;  3
+        sta ENAM0               ;  6
+        lda #$80                ;  8
+        sta PF0                 ; 11  left PF0: the wall
+        lda Grid,x              ; 15
+        sta PF1                 ; 18  left PF1 (shown from 28)
+        lda Grid+1,x            ; 22
+        sta PF2                 ; 25  left PF2 (shown from 38.7)
+        lda Grid+2,x            ; 29
+        sta PF0                 ; 32  right PF0: after 27.7, before 49.3
+        nop                     ; 34
+        nop                     ; 36
+        lda Grid+3,x            ; 40
+        sta PF1                 ; 43  right PF1: after 38.7, before 54.7
+        nop                     ; 45
+        nop                     ; 47
+        lda Grid+4,x            ; 51
+        sta PF2                 ; 54  right PF2: after 49.3, before 65.3
+        dey                     ; 56
+        bne .line               ; 59
+        inc Row                 ; 64
+        bne .row                ; 67
+        sty ENAM0               ; 69  (Y is 0)
+        WALL                    ; 3 wall lines
+
+        sta WSYNC               ; 12 blank
+        lda #0
         sta PF0
         sta PF1
         sta PF2
-        lda #35
-        sta TIM64T
+        ldx #11
+.bottom sta WSYNC
+        dex
+        bne .bottom
 
-        bit CXP0FB          ; player 0 hit a wall? undo the move
-        bpl .noWall
-        lda OldX
-        sta P0X
-        lda OldY
-        sta P0Y
-.noWall
-        bit CXM0P           ; shot hit the alien
-        bpl .noShot
-        lda Frame
-        and #$7F
+; ---------------------------------------------------------------- overscan
+
+        lda #2
+        sta VBLANK
+        lda #36
+        sta TIM64T
+.overscan
+        lda INTIM
+        bne .overscan
+        jmp Frame
+
+; ---------------------------------------------------------------- game
+
+InitGame
+        ldx #ROWS*ROWBYTES-1
+        lda #0
+.clr    sta Grid,x
+        dex
+        bpl .clr
+        ldx #4                  ; right wall bit (column 36) in every row
+.wall   lda #$10
+        sta Grid,x
+        txa
         clc
-        adc #8
-        sta P1X
-        lda #80
-        sta P1Y
-        lda #M0_OFF
-        sta M0Y
-        lda #24
-        sta HitTime
-        sed
-        lda Score
+        adc #ROWBYTES
+        tax
+        cpx #ROWS*ROWBYTES
+        bcc .wall
+
+        ; Three segments heading right along row 8.
+        lda #8
+        sta Tmp
+.body   ldx Tmp
+        ldy #8
+        jsr CellAddr
+        ora Grid,x
+        sta Grid,x
+        inc Tmp
+        lda Tmp
+        cmp #11
+        bne .body
+        lda #10
+        sta HeadX
+        lda #8
+        sta HeadY
+        sta TailY
+        sta TailX
+        lda #%0101              ; moves 0 and 1: right, right
+        sta Ring
+        lda #0
+        sta RingTail
+        sta Score
+        sta State
+        sta DeadT
+        sta Snd
+        sta AUDV0
+        lda #2
+        sta RingHead
+        lda #1
+        sta Dir
+        sta NextDir
+        lda #3
+        sta Len
+        lda #8
+        sta Speed
+        sta Timer
+        lda #NOFOOD
+        sta FoodY
+        rts
+
+; Sets NextDir from the joystick. Prefers a turn over going straight, never
+; reverses. Carry set if any direction is held.
+ReadStick
+        lda SWCHA
+        eor #$FF
+        and #$F0
+        sta Tmp3
+        beq .none
+        ldx #3
+.try    lda DirBit,x
+        and Tmp3
+        beq .next
+        txa
+        cmp Dir
+        beq .next
+        eor #2
+        cmp Dir
+        beq .next
+        stx NextDir
+        sec
+        rts
+.next   dex
+        bpl .try
+        sec
+        rts
+.none   clc
+        rts
+
+; Advance the snake one cell.
+Step
+        lda NextDir
+        sta Dir
+        tax
+        lda HeadX
+        clc
+        adc DX,x
+        sta Tmp
+        lda HeadY
+        clc
+        adc DY,x
+        sta Tmp2
+        lda Tmp                 ; walls
+        cmp #MINX
+        bcc Die
+        cmp #MAXX+1
+        bcs Die
+        lda Tmp2
+        cmp #ROWS
+        bcs Die
+
+        lda Tmp                 ; food?
+        cmp FoodX
+        bne .move
+        lda Tmp2
+        cmp FoodY
+        bne .move
+        jsr Eat
+        lda Len
+        cmp #MAXLEN
+        bcs .move
+        inc Len
+        jmp .head               ; grow: the tail stays put
+
+.move   ldx TailX               ; tail leaves its cell
+        ldy TailY
+        jsr CellAddr
+        eor #$FF
+        and Grid,x
+        sta Grid,x
+        jsr RingRead
+        tax
+        lda TailX
+        clc
+        adc DX,x
+        sta TailX
+        lda TailY
+        clc
+        adc DY,x
+        sta TailY
+        lda RingTail
         clc
         adc #1
-        sta Score
+        and #63
+        sta RingTail
+
+.head   ldx Tmp                 ; into a cell the snake already fills?
+        ldy Tmp2
+        jsr CellAddr
+        pha
+        and Grid,x
+        bne .crash
+        pla
+        ora Grid,x
+        sta Grid,x
+        lda Tmp
+        sta HeadX
+        lda Tmp2
+        sta HeadY
+        jmp RingWrite           ; records Dir and returns
+.crash  pla
+Die
+        lda #2
+        sta State
+        lda #90
+        sta DeadT
+        lda #8
+        sta AUDC0
+        lda #24
+        sta AUDF0
+        lda #14
+        sta AUDV0
+        lda #40
+        sta Snd
+        rts
+
+Eat
+        lda #NOFOOD
+        sta FoodY
+        lda Score
+        cmp #$99
+        beq .beep
+        sed
+        clc
+        adc #1
         cld
-.noShot
-        bit CXPPMM          ; touching the alien
-        bpl .noTouch
-        lda HitTime
-        bne .noTouch
+        sta Score
+        and #$0F                ; faster every 5 points, down to 3 frames a move
+        beq .faster
+        cmp #5
+        bne .beep
+.faster lda Speed
+        cmp #3
+        beq .beep
+        dec Speed
+.beep   lda #4
+        sta AUDC0
         lda #6
-        sta HitTime
-.noTouch
-        sta CXCLR
+        sta AUDF0
+        lda #10
+        sta AUDV0
+        lda #6
+        sta Snd
+        rts
 
-.oswait lda INTIM
-        bne .oswait
-        jmp MainLoop
+; Put food on a random empty cell; a few tries per frame.
+PlaceFood
+        lda #6
+        sta Row
+.again  jsr Rand
+        and #31
+        clc
+        adc #MINX
+        sta FoodX
+        jsr Rand
+        jsr Rand
+        and #ROWS-1
+        sta FoodY
+        ldx FoodX
+        ldy FoodY
+        jsr CellAddr
+        and Grid,x
+        beq .placed
+        dec Row
+        bne .again
+        lda #NOFOOD
+        sta FoodY
+.placed rts
 
-;---------------------------------------------------------------- subroutines
-; A = x position, X = object (0=P0 1=P1 2=M0 3=M1 4=BL)
-PosObject  SUBROUTINE
+; X = column, Y = row  ->  X = Grid index, A = bit mask.
+CellAddr
+        lda RowOff,y
+        clc
+        adc ColByte,x
+        sta Tmp3
+        lda ColMask,x
+        ldx Tmp3
+        rts
+
+; Store Dir in the move ring at RingHead and advance it.
+RingWrite
+        lda RingHead
+        lsr
+        lsr
+        tax
+        lda RingHead
+        and #3
+        tay
+        lda Ring,x
+        and RingClr,y
+        sta Tmp3
+        tya
+        asl
+        asl
+        ora Dir
+        tay
+        lda DirShift,y
+        ora Tmp3
+        sta Ring,x
+        lda RingHead
+        clc
+        adc #1
+        and #63
+        sta RingHead
+        rts
+
+; A = the move stored at RingTail.
+RingRead
+        lda RingTail
+        lsr
+        lsr
+        tax
+        lda RingTail
+        and #3
+        tay
+        lda Ring,x
+        cpy #0
+        beq .got
+.shift  lsr
+        lsr
+        dey
+        bne .shift
+.got    and #3
+        rts
+
+Rand
+        lda Seed
+        lsr
+        bcc .noEor
+        eor #$B4
+.noEor  sta Seed
+        rts
+
+; A = x (0-159), X = object (0 P0, 1 P1, 2 M0, 3 M1, 4 BL). Uses one line.
+PosObject
         sta WSYNC
         sec
 .div    sbc #15
@@ -294,149 +653,50 @@ PosObject  SUBROUTINE
         sta RESP0,x
         rts
 
-Joystick  SUBROUTINE
-        lda P0X
-        sta OldX
-        lda P0Y
-        sta OldY
-        ldx SWCHA
-        txa
-        and #$80
-        bne .noR
-        inc P0X
-        lda #0
-        sta Facing
-.noR    txa
-        and #$40
-        bne .noL
-        dec P0X
-        lda #8
-        sta Facing
-.noL    txa
-        and #$20
-        bne .noD
-        dec P0Y
-.noD    txa
-        and #$10
-        bne .noU
-        inc P0Y
-.noU
-        lda Facing
-        sta REFP0
-        lda INPT4
-        bmi .noFire
-        lda M0Y
-        cmp #M0_OFF
-        bne .noFire
-        lda P0Y
-        clc
-        adc #3
-        sta M0Y
-        lda P0X
-        clc
-        adc #2
-        sta M0X
-        lda Facing
-        beq .fireR
-        lda #$FD
-        bne .setDX
-.fireR  lda #3
-.setDX  sta M0DX
-.noFire rts
+; ---------------------------------------------------------------- tables
 
-MoveP1  SUBROUTINE
-        lda P1X
-        clc
-        adc P1DX
-        sta P1X
-        cmp #8
-        bcc .flipX
-        cmp #136
-        bcc .xok
-.flipX  lda #0
-        sec
-        sbc P1DX
-        sta P1DX
-.xok    lda P1Y
-        clc
-        adc P1DY
-        sta P1Y
-        cmp #2
-        bcc .flipY
-        cmp #86
-        bcc .yok
-.flipY  lda #0
-        sec
-        sbc P1DY
-        sta P1DY
-.yok    rts
+DX      .byte 0, 1, 0, $FF
+DY      .byte $FF, 0, 1, 0
+DirBit  .byte $10, $80, $20, $40        ; SWCHA bits for up, right, down, left
+RingClr .byte $FC, $F3, $CF, $3F
+DirShift
+        .byte 0, 1, 2, 3
+        .byte 0, 4, 8, 12
+        .byte 0, 16, 32, 48
+        .byte 0, 64, 128, 192
 
-MoveBall  SUBROUTINE
-        lda BLX
-        clc
-        adc BLDX
-        sta BLX
-        cmp #4
-        bcc .flipX
-        cmp #152
-        bcc .xok
-.flipX  lda #0
-        sec
-        sbc BLDX
-        sta BLDX
-.xok    lda BLY
-        clc
-        adc BLDY
-        sta BLY
-        cmp #2
-        bcc .flipY
-        cmp #92
-        bcc .yok
-.flipY  lda #0
-        sec
-        sbc BLDY
-        sta BLDY
-.yok    rts
+RowOff
+        .byte 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75
 
-MoveMissile  SUBROUTINE
-        lda M0Y
-        cmp #M0_OFF
-        beq .done
-        lda M0X
-        clc
-        adc M0DX
-        sta M0X
-        cmp #4
-        bcc .kill
-        cmp #154
-        bcc .done
-.kill   lda #M0_OFF
-        sta M0Y
-.done   rts
+; Column -> byte within a row and bit within that byte, matching how the TIA
+; scans each register: PF1 high bit first, PF2 and PF0 low bit first.
+ColByte
+        .byte 0, 0, 0, 0                                ; 0-3: left PF0 (wall only)
+        .byte 0, 0, 0, 0, 0, 0, 0, 0                    ; 4-11: PF1 left
+        .byte 1, 1, 1, 1, 1, 1, 1, 1                    ; 12-19: PF2 left
+        .byte 2, 2, 2, 2                                ; 20-23: PF0 right
+        .byte 3, 3, 3, 3, 3, 3, 3, 3                    ; 24-31: PF1 right
+        .byte 4, 4, 4, 4, 4, 4, 4, 4                    ; 32-39: PF2 right
+ColMask
+        .byte 0, 0, 0, 0
+        .byte $80, $40, $20, $10, $08, $04, $02, $01
+        .byte $01, $02, $04, $08, $10, $20, $40, $80
+        .byte $10, $20, $40, $80
+        .byte $80, $40, $20, $10, $08, $04, $02, $01
+        .byte $01, $02, $04, $08, $10, $20, $40, $80
 
-;---------------------------------------------------------------- data
-        ALIGN 256
-        include "demo-tables.inc"
-
-; Sprites are stored bottom row first (the kernel counts Y downward).
-ManGfx
-        .byte %01100110
-        .byte %00100100
-        .byte %00111100
-        .byte %00111100
-        .byte %01111110
-        .byte %00011000
-        .byte %00111100
-        .byte %00111100
-AlienGfx
-        .byte %10000001
-        .byte %01011010
-        .byte %11111111
-        .byte %11011011
-        .byte %01111110
-        .byte %00111100
-        .byte %00100100
-        .byte %01000010
+Digits
+        .byte %00111100, %01100110, %01101110, %01110110, %01100110, %01100110, %00111100, 0 ; 0
+        .byte %00011000, %00111000, %00011000, %00011000, %00011000, %00011000, %00111100, 0 ; 1
+        .byte %00111100, %01100110, %00000110, %00001100, %00110000, %01100000, %01111110, 0 ; 2
+        .byte %00111100, %01100110, %00000110, %00011100, %00000110, %01100110, %00111100, 0 ; 3
+        .byte %00001100, %00011100, %00101100, %01001100, %01111110, %00001100, %00001100, 0 ; 4
+        .byte %01111110, %01100000, %01111100, %00000110, %00000110, %01100110, %00111100, 0 ; 5
+        .byte %00111100, %01100000, %01111100, %01100110, %01100110, %01100110, %00111100, 0 ; 6
+        .byte %01111110, %00000110, %00001100, %00011000, %00110000, %00110000, %00110000, 0 ; 7
+        .byte %00111100, %01100110, %01100110, %00111100, %01100110, %01100110, %00111100, 0 ; 8
+        .byte %00111100, %01100110, %01100110, %00111110, %00000110, %00001100, %00111000, 0 ; 9
+        .byte 0, 0, 0, 0, 0, 0, 0, 0                                                        ; blank
 
         ORG $FFFC
         .word Reset

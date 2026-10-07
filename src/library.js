@@ -149,6 +149,6 @@ export function renderLibrary(el, { currentId, onPlay, onRemove }) {
     }
     el.append(li);
   };
-  add({ id: DEMO_ID, name: 'Demo cart', size: 0, mapper: 'built in' }, false);
+  add({ id: DEMO_ID, name: 'Snake', size: 0, mapper: 'built in' }, false);
   for (const e of library.list()) add(e, true);
 }

@@ -59,7 +59,9 @@ screen, where it runs fullscreen.
   supported.
 - `src/library.js`: the cartridge collection.
 - `src/shared.js`: ROM file reading (incl. zip/gz via `src/unzip.js`), loading modal, toast.
-- `roms/demo.asm`: a homebrew demo cart, built with `npm run build:demo` (needs `dasm`).
+- `roms/demo.asm`: the built-in cart, a small Snake game written for the 2600 (asymmetric
+  playfield board, missile food, player-sprite score). Built with `npm run build:demo`
+  (needs `dasm`).
 - `tools/render-frame.mjs`: runs a ROM headlessly and writes PNGs of the frame and its
   object layers (`node tools/render-frame.mjs game.a26 300 out/game`).
 
