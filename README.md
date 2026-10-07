@@ -16,7 +16,8 @@ with no dependencies and no build step.
 - Both halves can be used at once. **Left-handed** mode in settings swaps them.
 - **Select / Reset** sit in the top bar, which is kept clear of the joystick and fire
   zones. Most games need Reset to start.
-- Bluetooth keyboards and gamepads also work (arrows/WASD, Space; 1 = Select, 2 = Reset).
+- Keyboards (desktop or Bluetooth) and gamepads also work: arrows/WASD to move, Space to
+  fire, Return (or 2) = Reset, Tab (or 1) = Select.
 
 ## Cartridges (Cart)
 
