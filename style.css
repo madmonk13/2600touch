@@ -288,6 +288,7 @@ button.wide { width: 100%; }
 .field > span { display: flex; justify-content: space-between; margin-bottom: 8px; }
 .field output { color: var(--dim); font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
 .field input[type=range] { width: 100%; accent-color: var(--accent); }
+.field input[type=range]:disabled { opacity: 0.4; }
 
 /* iOS-style switch */
 label.switch {

@@ -21,8 +21,10 @@ export class AudioOut {
     this.source = tiaAudio;
     this.ctx = null;
     this.node = null;
+    this.gain = null;
     this.worklet = false;   // true once the AudioWorklet path is live
     this.muted = false;
+    this.volume = 0.7;      // 0..1, as set by the player
     this.lastProcess = 0;
   }
 
@@ -46,7 +48,7 @@ export class AudioOut {
   create(Ctx) {
     const ctx = this.ctx = new Ctx({ latencyHint: 'interactive' });
     this.gain = ctx.createGain();
-    this.gain.gain.value = 0.5;
+    this.gain.gain.value = this.level();
     this.gain.connect(ctx.destination);
     this.lastProcess = performance.now();
     if (!ctx.audioWorklet) { this.useScriptProcessor(); return; }
@@ -94,6 +96,7 @@ export class AudioOut {
     this.ctx.close().catch(() => {});
     this.ctx = null;
     this.node = null;
+    this.gain = null;
     this.worklet = false;
   }
 
@@ -110,6 +113,29 @@ export class AudioOut {
       src.connect(this.ctx.destination);
       src.start(0);
     } catch { /* not ready yet; the next gesture tries again */ }
+  }
+
+  // Loudness follows the square of the slider, which sounds more even than a
+  // straight line; the default 70% matches the original fixed level.
+  level() { return this.volume * this.volume; }
+
+  setVolume(v) {
+    this.volume = v;
+    if (this.ctx && this.gain) this.gain.gain.setTargetAtTime(this.level(), this.ctx.currentTime, 0.02);
+  }
+
+  // A short beep at the current volume, so the slider can be heard while the
+  // game is paused.
+  preview() {
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    const osc = this.ctx.createOscillator(), env = this.ctx.createGain(), t = this.ctx.currentTime;
+    osc.type = 'square';
+    osc.frequency.value = 440;
+    env.gain.setValueAtTime(0.3, t);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    osc.connect(env).connect(this.gain);
+    osc.start(t);
+    osc.stop(t + 0.13);
   }
 
   setMuted(m) {

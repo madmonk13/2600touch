@@ -18,6 +18,7 @@ const DEFAULTS = {
   haptics: true,
   hints: true,
   sound: true,
+  volume: 70,        // percent
   controller: {},    // romId → 'paddle' | 'joystick', when chosen in settings
   detected: {},      // romId → { paddle, index } from the paddle check
 };
@@ -215,6 +216,8 @@ function syncMenu() {
   $('haptics').checked = settings.haptics;
   $('hints').checked = settings.hints;
   $('sound').checked = settings.sound;
+  $('volume').value = settings.volume;
+  applySound();
   $('hapticsRow').hidden = !navigator.vibrate;
   applyControls();
 }
@@ -247,11 +250,19 @@ $('hints').addEventListener('change', (e) => {
   settings.hints = e.target.checked; save();
   if (settings.hints) flashHints(2500); else document.body.classList.remove('show-hints');
 });
+function applySound() {
+  audio.setVolume(settings.volume / 100);
+  $('volumeVal').textContent = `${settings.volume}%`;
+  $('volume').disabled = !settings.sound;
+}
 $('sound').addEventListener('change', (e) => {
   settings.sound = e.target.checked; save();
   if (settings.sound) audio.start();
   audio.setMuted(!settings.sound || state.menuOpen);
+  applySound();
 });
+$('volume').addEventListener('input', (e) => { settings.volume = +e.target.value; applySound(); save(); });
+$('volume').addEventListener('change', () => audio.preview());
 $('colorMode').addEventListener('change', (e) => { atari.riot.input.color = e.target.checked; });
 $('diff0').addEventListener('change', (e) => { atari.riot.input.diff0 = e.target.checked; });
 $('diff1').addEventListener('change', (e) => { atari.riot.input.diff1 = e.target.checked; });
