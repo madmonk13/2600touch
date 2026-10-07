@@ -1,6 +1,6 @@
 {
-  "name": "2600Touch",
-  "short_name": "2600Touch",
+  "name": "6502js",
+  "short_name": "6502js",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

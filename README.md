@@ -1,4 +1,4 @@
-# 2600Touch
+# 6502js
 
 A touch-first Atari 2600 emulator for phones. Plain HTML, CSS and JavaScript modules,
 with no dependencies and no build step.

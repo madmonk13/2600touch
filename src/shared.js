@@ -3,16 +3,18 @@
 import { extractRom, isZip, isGzip } from './unzip.js';
 import { MAX_LINES } from './emu/tia.js';
 
-const STORE = '2600touch:';
-const LEGACY_STORE = '3d2600:';
+const STORE = '6502js:';
+const LEGACY_STORES = ['2600touch:', '3d2600:'];   // the app's previous names, newest first
 
-// Carry the collection and settings over from the app's previous name.
+// Carry the collection and settings over from the app's previous names.
 try {
-  for (const key of Object.keys(localStorage)) {
-    if (!key.startsWith(LEGACY_STORE)) continue;
-    const next = STORE + key.slice(LEGACY_STORE.length);
-    if (localStorage.getItem(next) === null) localStorage.setItem(next, localStorage.getItem(key));
-    localStorage.removeItem(key);
+  for (const legacy of LEGACY_STORES) {
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith(legacy)) continue;
+      const next = STORE + key.slice(legacy.length);
+      if (localStorage.getItem(next) === null) localStorage.setItem(next, localStorage.getItem(key));
+      localStorage.removeItem(key);
+    }
   }
 } catch { /* storage unavailable or full */ }
 

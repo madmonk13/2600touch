@@ -1,4 +1,4 @@
-; 2600Touch demo cart: Snake.
+; 6502js demo cart: Snake.
 ;
 ; Steer with the joystick; any direction or fire starts. Eat the red food to
 ; grow and score; the snake speeds up every 5 points. Running into a wall or

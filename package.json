@@ -1,5 +1,5 @@
 {
-  "name": "2600touch",
+  "name": "6502js",
   "version": "0.1.0",
   "private": true,
   "description": "Touch-first Atari 2600 emulator for phones, with gesture controls",

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Generate the favicon and home-screen icons: "2600" in a bold, blocky 6x7
+// Generate the favicon and home-screen icons: "6502" in a bold, blocky 6x7
 // pixel font on a red square.
 import fs from 'node:fs';
 import zlib from 'node:zlib';
@@ -8,8 +8,9 @@ const GLYPHS = {
   2: ['011110', '110011', '000011', '001110', '011000', '110000', '111111'],
   6: ['011110', '110000', '110000', '111110', '110011', '110011', '011110'],
   0: ['011110', '110011', '110011', '110011', '110011', '110011', '011110'],
+  5: ['111111', '110000', '111110', '000011', '000011', '110011', '011110'],
 };
-const TEXT = '2600';
+const TEXT = '6502';
 const RED = [212, 38, 32], SHADOW = [122, 14, 12], WHITE = [255, 255, 255];
 
 // The text as a grid of on/off cells, one blank column between digits.
