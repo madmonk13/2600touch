@@ -125,7 +125,10 @@ function closeMenu() {
   audio.setMuted(!settings.sound);
   $('menu').hidden = true;
 }
-$('menuBtn').addEventListener('click', openMenu);
+// Open on release rather than 'click': mobile browsers can drop the click when
+// the finger shifts slightly or another finger is already on the screen.
+$('menuBtn').addEventListener('pointerup', (e) => { e.preventDefault(); openMenu(); });
+$('menuBtn').addEventListener('click', (e) => { if (e.detail === 0) openMenu(); }); // keyboard
 $('closeMenu').addEventListener('click', closeMenu);
 $('menu').addEventListener('click', (e) => { if (e.target === $('menu')) closeMenu(); });
 

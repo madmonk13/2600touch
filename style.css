@@ -139,11 +139,30 @@ body.show-hints .zone .hint { opacity: 1; }
 #bar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 5;
   height: calc(var(--bar-h) + var(--safe-t));
-  padding: var(--safe-t) calc(10px + var(--safe-r)) 0 calc(10px + var(--safe-l));
-  display: flex; align-items: center; gap: 8px;
+  padding: var(--safe-t) calc(2px + var(--safe-r)) 0 calc(2px + var(--safe-l));
+  display: flex; align-items: stretch;
   background: linear-gradient(rgba(11, 13, 20, 0.9), rgba(11, 13, 20, 0));
 }
 #bar #selectBtn { margin-left: auto; }
+/* Each bar button's touch target fills the strip's full height and is padded
+   wider than the visible face, so a slightly-off tap still lands on it rather
+   than missing and falling through to the joystick or fire zone. */
+#bar > button {
+  width: auto; height: auto;
+  padding: 0 8px;
+  display: grid; place-items: center;
+  background: none; border: 0; border-radius: 0;
+}
+#bar > button:active { background: none; }
+#bar .face {
+  display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--line);
+}
+#bar > button:active .face { background: rgba(255, 255, 255, 0.16); }
+#bar .icon .face { width: 42px; height: 42px; border-radius: 12px; }
+#bar .pill .face { padding: 8px 12px; border-radius: 999px; }
+#bar .pill.held .face { background: var(--accent); color: var(--accent-ink); }
 /* Landscape: the game runs up behind the bar, so drop the bar's shading. */
 @media (orientation: landscape) { #bar { background: none; } }
 
