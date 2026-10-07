@@ -18,17 +18,20 @@ with no dependencies and no build step.
   zones. Most games need Reset to start.
 - Bluetooth keyboards and gamepads also work (arrows/WASD, Space; 1 = Select, 2 = Reset).
 
+## Cartridges (Cart)
+
+Add a `.a26`, `.bin` or `.zip`. Every cart you add is kept in a local collection in
+`localStorage`, de-duplicated by content. Tap one to play it; removing takes two taps.
+The last cart played resumes on launch.
+
 ## Settings (⚙)
 
-- **Cartridges:** add a `.a26`, `.bin` or `.zip`. Every cart you add is kept in a local
-  collection in `localStorage`, de-duplicated by content. Tap one to play it; removing
-  takes two taps. The last cart played resumes on launch.
 - **Controls:** left-handed, controller (8-way joystick, 4-way joystick or paddle), d-pad size, vibrate on fire
   (Android only; Safari has no vibration API), zone hints.
 - **Sound** and the console switches (color/B&W, difficulty, power cycle).
 
-Settings open full screen. The game pauses and the touch controls are ignored while
-settings are open, and the game also pauses when the app is in the background.
+Cartridges and settings each open full screen. The game pauses and the touch controls
+are ignored while either is open, and the game also pauses when the app is in the background.
 
 ## Run
 

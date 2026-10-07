@@ -28,7 +28,7 @@ const screen2d = new Screen2D($('screen2d'));
 const windowTracker = new WindowTracker();
 const touch = new TouchControls({
   surface: $('surface'), dpad: $('dpad'), ripples: $('ripples'),
-  buttons: [$('menuBtn'), $('selectBtn'), $('resetBtn')],
+  buttons: [$('menuBtn'), $('cartBtn'), $('selectBtn'), $('resetBtn')],
 });
 input.sources.push(touch);
 
@@ -127,32 +127,38 @@ $('romFile').addEventListener('change', (e) => { if (e.target.files[0]) loadFile
 
 // ---------------------------------------------------------------- menu
 
-// The game pauses and the touch controls go inert while settings are open.
-function openMenu() {
+// Settings and the cartridge list are full-screen takeovers. The game pauses and
+// the touch controls go inert while either is open.
+const SHEETS = { menu: 'closeMenu', cartsMenu: 'closeCarts' }; // backdrop id → close button id
+
+function openSheet(id) {
+  for (const other of Object.keys(SHEETS)) $(other).hidden = other !== id;
   state.menuOpen = true;
   touch.releaseAll();
   touch.enabled = false;
   audio.setMuted(true);
-  $('menu').hidden = false;
 }
 function closeMenu() {
   state.menuOpen = false;
   touch.enabled = true;
   audio.setMuted(!settings.sound);
-  $('menu').hidden = true;
+  for (const id of Object.keys(SHEETS)) $(id).hidden = true;
 }
 // Open on release rather than 'click': mobile browsers can drop the click when
 // the finger shifts slightly or another finger is already on the screen.
-$('menuBtn').addEventListener('pointerup', (e) => { e.preventDefault(); openMenu(); });
-$('menuBtn').addEventListener('click', (e) => { if (e.detail === 0) openMenu(); }); // keyboard
-$('closeMenu').addEventListener('click', closeMenu);
-// After rotating, iOS can hit-test the settings screen against its old layout, so
-// the close button (which moves) stops getting taps. Judge by position instead.
-$('menu').addEventListener('pointerup', (e) => {
-  const r = $('closeMenu').getBoundingClientRect();
-  if (e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom) closeMenu();
-});
-$('menu').addEventListener('click', (e) => { if (e.target === $('menu')) closeMenu(); });
+for (const [btn, sheet] of [['menuBtn', 'menu'], ['cartBtn', 'cartsMenu']]) {
+  $(btn).addEventListener('pointerup', (e) => { e.preventDefault(); openSheet(sheet); });
+  $(btn).addEventListener('click', (e) => { if (e.detail === 0) openSheet(sheet); }); // keyboard
+}
+for (const [sheet, close] of Object.entries(SHEETS)) {
+  $(close).addEventListener('click', closeMenu);
+  // After rotating, iOS can hit-test a full-screen sheet against its old layout,
+  // so the close button (which moves) stops getting taps. Judge by position instead.
+  $(sheet).addEventListener('pointerup', (e) => {
+    const r = $(close).getBoundingClientRect();
+    if (e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom) closeMenu();
+  });
+}
 
 function save() { store.set('mobile', settings); }
 
@@ -286,7 +292,7 @@ function layout2D() {
 // again once the rotation animation has settled.
 function onViewportChange() {
   if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
-  if (state.menuOpen && innerWidth > innerHeight) document.querySelector('.sheet').scrollTop = 0;
+  if (state.menuOpen && innerWidth > innerHeight) document.querySelector('.settings-sheet').scrollTop = 0;
   layout2D();
 }
 let settleTimer = 0;
