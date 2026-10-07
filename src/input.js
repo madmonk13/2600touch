@@ -27,6 +27,7 @@ export class Input {
     this.paddleIndex = 0;     // which of the four paddles the game reads (0-1 left port, 2-3 right)
     this.uiReset = false;
     this.uiSelect = false;
+    this.onActivity = null;   // called on keyboard or gamepad input
     // Extra player-0 sources (e.g. touch controls): objects with dir() → SWCHA
     // direction bits (0x10 up, 0x20 down, 0x40 left, 0x80 right), fire() → bool
     // and optionally paddleRate() → turn rate in [-1, 1].
@@ -40,6 +41,7 @@ export class Input {
       if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'BUTTON')) t.blur();
       e.preventDefault();
       this.keys.add(e.code);
+      if (this.onActivity) this.onActivity();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
@@ -79,6 +81,7 @@ export class Input {
       if (slot === 0) { p0 |= d; fire0 ||= fire; rate += Math.abs(ax) > 0.15 ? ax : 0; } else { p1 |= d >> 4; fire1 ||= fire; }
       if (b(9)) reset = true;
       if (b(8)) select = true;
+      if (this.onActivity && (d || fire || b(8) || b(9) || Math.abs(ax) > 0.5)) this.onActivity();
       slot++;
     }
 

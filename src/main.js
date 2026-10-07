@@ -280,12 +280,16 @@ function holdButton(el, key) {
 holdButton($('selectBtn'), 'uiSelect');
 holdButton($('resetBtn'), 'uiReset');
 
-touch.onTouch = () => {
+// The touch-zone hints fade once the player starts playing, whether by touch,
+// mouse, keyboard or gamepad.
+function dismissHints() {
   if (document.body.classList.contains('show-hints')) {
     clearTimeout(hintTimer);
     hintTimer = setTimeout(() => document.body.classList.remove('show-hints'), 600);
   }
-};
+}
+touch.onTouch = dismissHints;
+input.onActivity = dismissHints;
 
 // ---------------------------------------------------------------- display
 
