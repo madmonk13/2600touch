@@ -5,6 +5,7 @@ import { AudioOut } from './audio-out.js';
 import { store, readRomFile, fetchRom, withLoading, toast, WindowTracker } from './shared.js';
 import { library, renderLibrary, DEMO_ID } from './library.js';
 import { TouchControls } from './touch.js';
+import { encode, decode } from './emu/state.js';
 
 const $ = (id) => document.getElementById(id);
 const FRAME_TIME = 1 / 60;
@@ -19,6 +20,7 @@ const DEFAULTS = {
   hints: true,
   sound: true,
   volume: 70,        // percent
+  resume: true,      // pick games up where they were left
   controller: {},    // romId → 'paddle' | 'joystick', when chosen in settings
   detected: {},      // romId → { paddle, index } from the paddle check
 };
@@ -82,8 +84,42 @@ function detectController(id, bytes) {
   detector.postMessage({ id, bytes: bytes.slice() });
 }
 
+// ---------------------------------------------------------------- resume
+
+// The game in progress is saved when the page is hidden or closed, and every
+// few seconds while playing, so a refresh or relaunch picks up where it was.
+const RESUME = 'resume:';
+const RESUME_VERSION = 1;              // bump when saved state stops being compatible
+const RESUME_EVERY_MS = 5000;
+
+function saveResume() {
+  if (!atari.cart || !settings.resume || !state.romId) return;
+  store.trySet(RESUME + state.romId, encode({
+    v: RESUME_VERSION, mapper: atari.cart.name, state: atari.saveState(), paddlePos: input.paddlePos,
+  }));
+}
+
+function restoreResume(id) {
+  if (!settings.resume) return;
+  const text = store.getRaw(RESUME + id);
+  if (!text) return;
+  try {
+    const saved = decode(text);
+    if (saved.v !== RESUME_VERSION || saved.mapper !== atari.cart.name) throw new Error('stale');
+    atari.loadState(saved.state);
+    input.paddlePos = saved.paddlePos ?? 0.5;
+  } catch {
+    store.remove(RESUME + id);           // unreadable or from an older version: start fresh
+    atari.reset();
+  }
+}
+
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveResume(); });
+window.addEventListener('pagehide', saveResume);
+
 // Load a cart into the console and record it in the collection.
 function loadRom(bytes, name, id) {
+  saveResume();                          // keep the game being left
   const mapper = atari.load(bytes);
   windowTracker.reset();
   let saved = true;
@@ -95,6 +131,7 @@ function loadRom(bytes, name, id) {
   }
   state.romId = id;
   input.paddlePos = 0.5;
+  restoreResume(id);
   applyControls();
   detectController(id, bytes);
   if (saved) library.setLast(id);
@@ -107,6 +144,7 @@ function refreshLibrary() {
     onPlay: (entry) => playEntry(entry),
     onRemove: (entry) => {
       library.remove(entry.id);
+      store.remove(RESUME + entry.id);
       delete settings.controller[entry.id];
       delete settings.detected[entry.id];
       save();
@@ -217,6 +255,7 @@ function syncMenu() {
   $('hints').checked = settings.hints;
   $('sound').checked = settings.sound;
   $('volume').value = settings.volume;
+  $('resume').checked = settings.resume;
   applySound();
   $('hapticsRow').hidden = !navigator.vibrate;
   applyControls();
@@ -266,7 +305,15 @@ $('volume').addEventListener('change', () => audio.preview());
 $('colorMode').addEventListener('change', (e) => { atari.riot.input.color = e.target.checked; });
 $('diff0').addEventListener('change', (e) => { atari.riot.input.diff0 = e.target.checked; });
 $('diff1').addEventListener('change', (e) => { atari.riot.input.diff1 = e.target.checked; });
-$('powerBtn').addEventListener('click', () => { if (atari.cart) { atari.reset(); windowTracker.reset(); closeMenu(); } });
+$('powerBtn').addEventListener('click', () => {
+  if (!atari.cart) return;
+  store.remove(RESUME + state.romId);
+  atari.reset(); windowTracker.reset(); closeMenu();
+});
+$('resume').addEventListener('change', (e) => {
+  settings.resume = e.target.checked; save();
+  if (settings.resume) saveResume(); else if (state.romId) store.remove(RESUME + state.romId);
+});
 
 // Console switches: held while pressed, but never shorter than a few frames.
 function holdButton(el, key) {
@@ -351,7 +398,7 @@ if (window.visualViewport) window.visualViewport.addEventListener('resize', onRo
 
 // ---------------------------------------------------------------- loop
 
-let acc = 0, lastTime = performance.now(), lastHeight = 0;
+let acc = 0, lastTime = performance.now(), lastHeight = 0, lastSave = performance.now();
 function tick(now) {
   const dt = Math.min(0.1, (now - lastTime) / 1000);
   lastTime = now;
@@ -374,6 +421,7 @@ function tick(now) {
       if (win.height !== lastHeight) { lastHeight = win.height; layout2D(); }
       screen2d.draw(f, win);
     }
+    if (now - lastSave > RESUME_EVERY_MS) { lastSave = now; saveResume(); }
   } else {
     acc = 0;
   }

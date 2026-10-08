@@ -31,6 +31,9 @@ The last cart played resumes on launch.
 
 - **Controls:** left-handed, controller (8-way joystick, 4-way joystick or paddle), d-pad size, vibrate on fire
   (Android only; Safari has no vibration API), zone hints.
+- **Resume where I left off** (on by default): the game in progress is saved when the
+  page is hidden or closed, and every few seconds while playing, so a refresh or relaunch
+  picks up exactly where you were. Restart / Power cycle starts over.
 - **Sound** and the console switches (color/B&W, difficulty, power cycle).
 
 Cartridges and settings each open full screen. The game pauses and the touch controls

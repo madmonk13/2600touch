@@ -2,9 +2,15 @@
 // scanline (~31.4 kHz). Samples go into a ring buffer that the browser audio
 // output resamples from.
 
+import { capture, apply } from './state.js';
+
 export const TIA_SAMPLE_RATE = 31440;
 
+const CHANNEL_STATE = ['audc', 'audf', 'audv', 'div', 'out', 'poly4', 'poly5', 'poly9', 'count'];
 class Channel {
+  saveState() { return capture(this, CHANNEL_STATE); }
+  loadState(s) { apply(this, CHANNEL_STATE, s); }
+
   constructor() { this.reset(); }
   reset() {
     this.audc = 0; this.audf = 0; this.audv = 0;
@@ -36,7 +42,11 @@ class Channel {
   }
 }
 
+const AUDIO_STATE = ['ch', 'dcIn', 'dcOut'];
 export class TIAAudio {
+  saveState() { return capture(this, AUDIO_STATE); }
+  loadState(s) { apply(this, AUDIO_STATE, s); }
+
   constructor() {
     this.ch = [new Channel(), new Channel()];
     this.buffer = new Float32Array(1 << 15);

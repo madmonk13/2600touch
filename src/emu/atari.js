@@ -4,10 +4,15 @@ import { CPU6502 } from './cpu6502.js';
 import { TIA } from './tia.js';
 import { RIOT } from './riot.js';
 import { createCart } from './cart.js';
+import { capture, apply } from './state.js';
 
 const CYCLES_PER_LINE = 76;
 
+const ATARI_STATE = ['cpu', 'tia', 'riot', 'cart', 'frameDone'];
 export class Atari2600 {
+  saveState() { return capture(this, ATARI_STATE); }
+  loadState(s) { apply(this, ATARI_STATE, s); }
+
   constructor() {
     this.tia = new TIA();
     this.riot = new RIOT();

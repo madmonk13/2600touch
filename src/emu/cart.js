@@ -2,6 +2,8 @@
 //   read(addr), write(addr, v)  — addr is in the 4K cart window ($1000-$1FFF)
 //   snoop(addr, v)              — optional: sees writes below $1000 (used by 3F)
 
+import { capture, apply } from './state.js';
+
 function hasSig(rom, sig, minCount = 1) {
   let count = 0;
   outer: for (let i = 0; i <= rom.length - sig.length; i++) {
@@ -20,14 +22,22 @@ function isSuperchip(rom) {
   return true;
 }
 
+const FLAT_STATE = [];
 class Flat {
+  saveState() { return capture(this, FLAT_STATE); }
+  loadState(s) { apply(this, FLAT_STATE, s); }
+
   constructor(rom) { this.rom = rom; this.mask = rom.length - 1; this.name = rom.length === 2048 ? '2K' : '4K'; }
   read(a) { return this.rom[a & this.mask]; }
   write() {}
 }
 
 // F8 / F6 / F4 / FA style: hotspots near the top of the address space pick a 4K bank.
+const HOTSPOT_STATE = ['bank', 'ram'];
 class Hotspot {
+  saveState() { return capture(this, HOTSPOT_STATE); }
+  loadState(s) { apply(this, HOTSPOT_STATE, s); }
+
   constructor(rom, first, count, name, ramSize = 0) {
     this.rom = rom; this.first = first; this.count = count; this.name = name;
     this.bank = count - 1;
@@ -52,7 +62,11 @@ class Hotspot {
 }
 
 // Parker Brothers E0: four 1K slices, the last fixed to the final 1K.
+const E0_STATE = ['slice'];
 class E0 {
+  saveState() { return capture(this, E0_STATE); }
+  loadState(s) { apply(this, E0_STATE, s); }
+
   constructor(rom) { this.rom = rom; this.name = 'E0'; this.slice = [4, 5, 6, 7]; }
   hit(a) {
     const off = a & 0x0FFF;
@@ -67,7 +81,10 @@ class E0 {
 }
 
 // Tigervision 3F: writes to $00-$3F select the 2K bank at $1000; $1800 is fixed to the last 2K.
+const T3F_STATE = ['bank'];
 class T3F {
+  saveState() { return capture(this, T3F_STATE); }
+  loadState(s) { apply(this, T3F_STATE, s); }
   constructor(rom) { this.rom = rom; this.name = '3F'; this.bank = 0; this.banks = rom.length >> 11; }
   read(a) {
     const off = a & 0x0FFF;
@@ -79,7 +96,11 @@ class T3F {
 }
 
 // M-Network E7: switchable 2K ROM/RAM at $1000, 256-byte RAM banks at $1800, fixed ROM above.
+const E7_STATE = ['bank', 'ramBank', 'ram1k', 'ram256'];
 class E7 {
+  saveState() { return capture(this, E7_STATE); }
+  loadState(s) { apply(this, E7_STATE, s); }
+
   constructor(rom) {
     this.rom = rom; this.name = 'E7';
     this.romBanks = rom.length >> 11;

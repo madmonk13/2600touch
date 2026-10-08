@@ -6,6 +6,7 @@
 // `cP0`, `cP1`). That per-object breakdown is what the 3D renderer extrudes.
 
 import { TIAAudio } from './audio.js';
+import { capture, apply } from './state.js';
 
 export const OBJ_PF = 1, OBJ_BL = 2, OBJ_M0 = 4, OBJ_M1 = 8, OBJ_P0 = 16, OBJ_P1 = 32;
 // Not an object: set on pixels drawn while CTRLPF playfield priority was on.
@@ -57,7 +58,11 @@ function makeFrame() {
   };
 }
 
+const TIA_STATE = ['cc', 'hpos', 'line', 'vsync', 'vblank', 'nusiz0', 'nusiz1', 'colup0', 'colup1', 'colupf', 'colubk', 'ctrlpf', 'refp0', 'refp1', 'pf0', 'pf1', 'pf2', 'pfBits', 'pos', 'hm', 'grp0', 'grp0old', 'grp1', 'grp1old', 'enam0', 'enam1', 'enabl', 'enablOld', 'vdelp0', 'vdelp1', 'vdelbl', 'resmp0', 'resmp1', 'collisions', 'hmoveBar', 'paddleDumpCycle', 'paddleDumped', 'wsync', 'frameNumber', 'audio'];
 export class TIA {
+  saveState() { return capture(this, TIA_STATE); }
+  loadState(s) { apply(this, TIA_STATE, s); }
+
   constructor() {
     this.audio = new TIAAudio();
     this.back = makeFrame();

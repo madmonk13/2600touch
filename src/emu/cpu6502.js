@@ -6,6 +6,8 @@
 // The bus reads `cpu.busCycle` to catch the TIA/RIOT up before the access, so
 // mid-scanline register writes land on the right color clock.
 
+import { capture, apply } from './state.js';
+
 const IMP = 0, ACC = 1, IMM = 2, ZP = 3, ZPX = 4, ZPY = 5, ABS = 6, ABX = 7,
   ABY = 8, IND = 9, IZX = 10, IZY = 11, REL = 12;
 
@@ -86,7 +88,11 @@ def('TAS', [[0x9B, ABY, 5]]);
 def('LAS', [[0xBB, ABY, 4, 1]]);
 for (let op = 0; op < 256; op++) if (!OPS[op]) OPS[op] = ['JAM', IMP, 2, false];
 
+const CPU_STATE = ['a', 'x', 'y', 'sp', 'pc', 'n', 'v', 'd', 'i', 'z', 'c', 'cycles', 'busCycle', 'jammed'];
 export class CPU6502 {
+  saveState() { return capture(this, CPU_STATE); }
+  loadState(s) { apply(this, CPU_STATE, s); }
+
   constructor(bus) {
     this.bus = bus;
     this.cycles = 0;      // total cycles executed

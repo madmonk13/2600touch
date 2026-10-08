@@ -1,7 +1,13 @@
 // 6532 RIOT: 128 bytes of RAM, joystick/console-switch ports, interval timer.
 // The timer is evaluated lazily from the CPU cycle count.
 
+import { capture, apply } from './state.js';
+
+const RIOT_STATE = ['ram', 'swacnt', 'swbcnt', 'swaOut', 'timerStart', 'timerValue', 'timerShift', 'timerFlag', 'flagCleared'];
 export class RIOT {
+  saveState() { return capture(this, RIOT_STATE); }
+  loadState(s) { apply(this, RIOT_STATE, s); }
+
   constructor() {
     this.ram = new Uint8Array(128);
     this.input = {
