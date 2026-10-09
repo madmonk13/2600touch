@@ -32,7 +32,7 @@ const screen2d = new Screen2D($('screen2d'));
 const windowTracker = new WindowTracker();
 const touch = new TouchControls({
   surface: $('surface'), dpad: $('dpad'), ripples: $('ripples'),
-  buttons: [$('menuBtn'), $('cartBtn'), $('selectBtn'), $('resetBtn')],
+  buttons: [$('menuBtn'), $('pauseBtn'), $('cartBtn'), $('selectBtn'), $('resetBtn')],
 });
 input.sources.push(touch);
 
@@ -42,7 +42,7 @@ settings.detected = { ...settings.detected };
 // Carry over the earlier per-cart paddle list.
 for (const id of Object.keys(settings.paddleCarts || {})) settings.controller[id] = 'paddle';
 delete settings.paddleCarts;
-const state = { romId: null, menuOpen: false };
+const state = { romId: null, menuOpen: false, paused: false };
 
 // Block page-level zoom/scroll gestures; this is a full-screen app.
 for (const ev of ['gesturestart', 'gesturechange', 'dblclick']) {
@@ -119,6 +119,7 @@ window.addEventListener('pagehide', saveResume);
 
 // Load a cart into the console and record it in the collection.
 function loadRom(bytes, name, id) {
+  if (state.paused) setPaused(false);
   saveResume();                          // keep the game being left
   const mapper = atari.load(bytes);
   windowTracker.reset();
@@ -205,12 +206,33 @@ function openSheet(id) {
 }
 function closeMenu() {
   state.menuOpen = false;
-  touch.enabled = true;
-  audio.setMuted(!settings.sound);
+  touch.enabled = !state.paused;
+  audio.setMuted(!settings.sound || state.paused);
   for (const id of Object.keys(SHEETS)) $(id).hidden = true;
 }
 // Open on release rather than 'click': mobile browsers can drop the click when
 // the finger shifts slightly or another finger is already on the screen.
+// Pause: stops the game (and its sound) until resumed from the bar button,
+// the veil over the game, or P on a keyboard. The game is saved for resume.
+function setPaused(paused) {
+  state.paused = paused;
+  document.body.classList.toggle('paused', paused);
+  $('paused').hidden = !paused;
+  $('pauseBtn').setAttribute('aria-pressed', String(paused));
+  $('pauseBtn').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
+  if (paused) { touch.releaseAll(); saveResume(); }
+  touch.enabled = !paused && !state.menuOpen;
+  audio.setMuted(paused || state.menuOpen || !settings.sound);
+}
+$('pauseBtn').addEventListener('pointerup', (e) => { e.preventDefault(); setPaused(!state.paused); });
+$('pauseBtn').addEventListener('click', (e) => { if (e.detail === 0) setPaused(!state.paused); }); // keyboard
+$('paused').addEventListener('pointerup', (e) => { e.preventDefault(); setPaused(false); });
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyP' || e.metaKey || e.ctrlKey || e.altKey || state.menuOpen) return;
+  e.preventDefault();
+  setPaused(!state.paused);
+});
+
 for (const [btn, sheet] of [['menuBtn', 'menu'], ['cartBtn', 'cartsMenu']]) {
   $(btn).addEventListener('pointerup', (e) => { e.preventDefault(); openSheet(sheet); });
   $(btn).addEventListener('click', (e) => { if (e.detail === 0) openSheet(sheet); }); // keyboard
@@ -402,7 +424,10 @@ let acc = 0, lastTime = performance.now(), lastHeight = 0, lastSave = performanc
 function tick(now) {
   const dt = Math.min(0.1, (now - lastTime) / 1000);
   lastTime = now;
-  const running = atari.cart && !state.menuOpen && !document.hidden;
+  const running = atari.cart && !state.menuOpen && !state.paused && !document.hidden;
+  // The pause button only means something with a game loaded.
+  const pauseBtn = $('pauseBtn');
+  if (pauseBtn.disabled === !!atari.cart) pauseBtn.disabled = !atari.cart;
 
   if (running) {
     acc += dt;

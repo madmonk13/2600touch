@@ -20,6 +20,8 @@ with no dependencies and no build step.
   zones. Most games need Reset to start.
 - Keyboards (desktop or Bluetooth) and gamepads also work: arrows/WASD to move, Space to
   fire, Return (or 2) = Reset, Tab (or 1) = Select.
+- **Pause** (the ⏸ button in the top bar, or P on a keyboard): stops the game and its sound; tap
+  the screen or the button again to resume. The game is saved for resume when paused.
 
 ## Cartridges (Cart)
 
