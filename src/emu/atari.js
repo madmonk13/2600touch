@@ -19,11 +19,13 @@ export class Atari2600 {
     this.cart = null;
     this.cpu = new CPU6502(this);
     this.frameDone = false;
+    this.dataBus = 0;
     this.tia.onFrame = () => { this.frameDone = true; };
   }
 
   load(romData) {
     this.cart = createCart(romData);
+    if (this.cart.attach) this.cart.attach(this);   // carts that need the CPU clock or RAM
     this.reset();
     return this.cart.name;
   }
@@ -38,14 +40,30 @@ export class Atari2600 {
 
   read(addr) {
     addr &= 0x1FFF;
-    if (addr & 0x1000) return this.cart.read(addr);
-    if (!(addr & 0x80)) return this.tia.read(addr, this.cpu.busCycle);
-    if (addr & 0x200) return this.riot.readIO(addr, this.cpu.busCycle);
-    return this.riot.ram[addr & 0x7F];
+    let v;
+    if (addr & 0x1000) v = this.cart.read(addr);
+    // The TIA drives only data bits 7 and 6; the rest keep whatever was last
+    // on the bus (Haunted House counts on it).
+    else if (!(addr & 0x80)) v = (this.tia.read(addr, this.cpu.busCycle) & 0xC0) | (this.dataBus & 0x3F);
+    else if (addr & 0x200) v = this.riot.readIO(addr, this.cpu.busCycle);
+    else v = this.riot.ram[addr & 0x7F];
+    // Some carts watch the whole bus (Activision's stack-watching FE, UA,
+    // the Supercharger's write timing).
+    if (this.cart.access) this.cart.access(addr, v);
+    this.dataBus = v;
+    return v;
+  }
+
+  // Bus cycles the 6502 spends reading an address it then ignores (see
+  // cpu6502.js). Only the Supercharger cares: its write timing counts them.
+  dummy(addr) {
+    if (this.cart.dummy) this.cart.dummy(addr & 0x1FFF);
   }
 
   write(addr, v) {
     addr &= 0x1FFF;
+    this.dataBus = v;
+    if (this.cart.access) this.cart.access(addr, v);
     if (addr & 0x1000) { this.cart.write(addr, v); return; }
     if (this.cart.snoop) this.cart.snoop(addr, v);
     if (!(addr & 0x80)) { this.tia.write(addr, v, this.cpu.busCycle); return; }

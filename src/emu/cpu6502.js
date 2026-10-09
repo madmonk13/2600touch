@@ -48,7 +48,7 @@ def('CPX', [[0xE0, IMM, 2], [0xE4, ZP, 3], [0xEC, ABS, 4]]);
 def('CPY', [[0xC0, IMM, 2], [0xC4, ZP, 3], [0xCC, ABS, 4]]);
 def('BIT', [[0x24, ZP, 3], [0x2C, ABS, 4]]);
 def('JMP', [[0x4C, ABS, 3], [0x6C, IND, 5]]);
-def('JSR', [[0x20, ABS, 6]]);
+def('JSR', [[0x20, ZP, 6]]);   // reads only the low byte up front; see step()
 for (const [op, m] of [[0x10, 'BPL'], [0x30, 'BMI'], [0x50, 'BVC'], [0x70, 'BVS'],
   [0x90, 'BCC'], [0xB0, 'BCS'], [0xD0, 'BNE'], [0xF0, 'BEQ']]) def(m, [[op, REL, 2]]);
 for (const [op, m, c] of [[0x00, 'BRK', 7], [0x40, 'RTI', 6], [0x60, 'RTS', 6],
@@ -192,7 +192,11 @@ export class CPU6502 {
       case ABX: case ABY:
         base = bus.read(pc) | (bus.read((pc + 1) & 0xFFFF) << 8); this.pc = (pc + 2) & 0xFFFF;
         a = (base + (mode === ABX ? this.x : this.y)) & 0xFFFF;
-        if (pen && ((a ^ base) & 0xFF00)) this.cyc++;
+        if ((a ^ base) & 0xFF00) {
+          if (pen) this.cyc++;
+          // The 6502 first reads the address before the carry into the high byte.
+          if (bus.dummy) bus.dummy((base & 0xFF00) | (a & 0xFF));
+        }
         return a;
       case IND:
         base = bus.read(pc) | (bus.read((pc + 1) & 0xFFFF) << 8); this.pc = (pc + 2) & 0xFFFF;
@@ -204,7 +208,10 @@ export class CPU6502 {
         zp = bus.read(pc); this.pc = (pc + 1) & 0xFFFF;
         base = bus.read(zp) | (bus.read((zp + 1) & 0xFF) << 8);
         a = (base + this.y) & 0xFFFF;
-        if (pen && ((a ^ base) & 0xFF00)) this.cyc++;
+        if ((a ^ base) & 0xFF00) {
+          if (pen) this.cyc++;
+          if (bus.dummy) bus.dummy((base & 0xFF00) | (a & 0xFF));
+        }
         return a;
     }
     return 0;
@@ -218,6 +225,8 @@ export class CPU6502 {
     this.pc = (this.pc + 1) & 0xFFFF;
     const [m, mode, cyc, pen] = OPS[opcode];
     this.cyc = cyc;
+    // Two-cycle implied instructions read the next byte and ignore it.
+    if ((mode === IMP || mode === ACC) && cyc === 2 && this.bus.dummy) this.bus.dummy(this.pc);
     const ea = (mode === IMP || mode === ACC || mode === REL) ? 0 : this.addr(mode, pen);
     let v, t;
 
@@ -274,9 +283,11 @@ export class CPU6502 {
       case 'BEQ': this.branch(this.z); break;
       case 'JMP': this.pc = ea; break;
       case 'JSR':
-        t = (this.pc - 1) & 0xFFFF;
+        // As on the real 6502: read the target's low byte, push the return
+        // address, then read the high byte (Activision's FE carts watch for it).
+        t = this.pc;                                   // the high byte's address
         this.push(t >> 8); this.push(t & 0xFF);
-        this.pc = ea;
+        this.pc = ea | (this.bus.read(t) << 8);
         break;
       case 'RTS': this.pc = ((this.pull() | (this.pull() << 8)) + 1) & 0xFFFF; break;
       case 'RTI': this.setP(this.pull()); this.pc = this.pull() | (this.pull() << 8); break;

@@ -216,6 +216,7 @@ function closeMenu() {
 // the veil over the game, or P on a keyboard. The game is saved for resume.
 function setPaused(paused) {
   state.paused = paused;
+  store.set('paused', paused);           // kept across reloads
   document.body.classList.toggle('paused', paused);
   $('paused').hidden = !paused;
   $('pauseBtn').setAttribute('aria-pressed', String(paused));
@@ -471,6 +472,7 @@ function tick(now) {
   } catch (err) {
     toast(`Couldn't load the demo: ${err.message}`);
   }
+  if (atari.cart && store.get('paused')) setPaused(true);   // it was paused when the page closed
   layout2D();
   flashHints(0);
   requestAnimationFrame(tick);

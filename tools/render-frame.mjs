@@ -3,7 +3,8 @@
 // object-layer visualization to PNG.
 //
 //   node tools/render-frame.mjs roms/demo.bin [frames=120] [out=out/frame]
-//   Optional env: HOLD="right,fire" to hold joystick inputs the whole time.
+//   Optional env: HOLD="right,fire" to hold joystick inputs the whole time;
+//   RESET=frame to press the console's Reset switch then (for a few frames).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,7 +28,11 @@ for (const h of hold) {
 const t0 = performance.now();
 const frames = parseInt(framesArg, 10);
 const lineCounts = [];
-for (let i = 0; i < frames; i++) { atari.runFrame(); lineCounts.push(atari.tia.front.lines); }
+const resetAt = +(process.env.RESET ?? -100);
+for (let i = 0; i < frames; i++) {
+  atari.riot.input.reset = i >= resetAt && i < resetAt + 6;
+  atari.runFrame(); lineCounts.push(atari.tia.front.lines);
+}
 const ms = performance.now() - t0;
 const f = atari.tia.front;
 

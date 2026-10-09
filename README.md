@@ -25,7 +25,11 @@ with no dependencies and no build step.
 
 ## Cartridges (Cart)
 
-Add a `.a26`, `.bin` or `.zip`. Every cart you add is kept in a local collection in
+Add a `.a26`, `.bin` or `.zip`. The cartridge type is detected from the ROM (size, then
+telltale code), covering every type used by commercial games of the era. Not supported:
+homebrew carts that carry an ARM coprocessor (DPC+, CDF, BUS), which would need an ARM
+emulator. Supercharger games that span several loads work from the combined file; a
+single middle load on its own expects the earlier loads to have run first. Every cart you add is kept in a local collection in
 `localStorage`, de-duplicated by content. Tap one to play it; removing takes two taps.
 The last cart played resumes on launch.
 
@@ -56,7 +60,11 @@ screen, where it runs fullscreen.
 ## Layout
 
 - `src/emu/`: the emulator. 6502 CPU (incl. decimal mode and illegal opcodes), TIA
-  video/audio, RIOT, and cartridge mappers (2K, 4K, F8, F6, F4, FA, Superchip, E0, E7, 3F).
+  video/audio, RIOT, and cartridge mappers: 2K, 4K, F8, F6, F4, FA, Superchip (SC), E0
+  (Parker Bros), E7 (M-Network), 3F (Tigervision), FE (Activision: Decathlon, Robot
+  Tank, Space Shuttle), DPC (Pitfall II's display chip, music included), AR (Starpath
+  Supercharger tapes, single and multi-load), CV (CommaVid), UA, 0840 (Econobank), F0
+  (Dynacom), and the homebrew EF/EFSC, DF/DFSC, BF/BFSC, SB and 3E.
 - `src/main.js`: app wiring, menu, layout and the frame loop.
 - `src/touch.js`: the gesture controls.
 - `src/detect-worker.js`: the paddle-game check, in a background worker.
