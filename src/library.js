@@ -149,6 +149,9 @@ export function renderLibrary(el, { currentId, onPlay, onRemove }) {
     }
     el.append(li);
   };
+  // Carts you've added first, A-Z; then the built-in demo (the one cart that
+  // wasn't uploaded).
+  const byName = (x, y) => x.name.localeCompare(y.name, undefined, { sensitivity: 'base', numeric: true });
+  for (const e of library.list().sort(byName)) add(e, true);
   add({ id: DEMO_ID, name: 'Snake', size: 0, mapper: 'built in' }, false);
-  for (const e of library.list()) add(e, true);
 }
